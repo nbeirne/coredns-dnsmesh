@@ -1,9 +1,15 @@
 package dnsmesh
 
 import (
+	"context"
+	"time"
+
 	"net/netip"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/networkservicemesh/fanout"
+	"github.com/miekg/dns"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
 
 
@@ -18,23 +24,29 @@ func (d DnsHost) Compare(d2 DnsHost) int {
 
 
 type MeshProvider interface{
-	start() error
-	mesh_dns_hosts() []DnsHost
+	Start() error
+	MeshDnsHosts() []DnsHost
 }
 
 type DnsMesh struct {
-	zone string
+	Zone string
+	Next plugin.Handler
 
-	mesh_providers []MeshProvider
-	next plugin.Handler
+	meshProviders []MeshProvider
 }
+
+func (d *DnsMesh) AddMeshProvider(meshProvider MeshProvider) {
+	d.meshProviders = append(d.meshProviders, meshProvider)
+}
+
+var log = clog.NewWithPlugin("dnsmesh")
 
 // Name implements the Handler interface.
 func (d *DnsMesh) Name() string { return "dnsmesh" }
 
-func (d *DnsMesh) start() error {
-	for _, provider := range d.mesh_providers {
-		err := provider.start()
+func (d *DnsMesh) Start() error {
+	for _, provider := range d.meshProviders {
+		err := provider.Start()
 		if (err != nil) {
 			return err
 		}
@@ -42,3 +54,40 @@ func (d *DnsMesh) start() error {
 
 	return nil
 }
+
+func (d *DnsMesh) CreateFanout() *fanout.Fanout {
+	f := &fanout.Fanout {
+		Timeout: 30 * time.Second, // TODO: const
+		ExcludeDomains: fanout.NewDomain(),
+		Race: false,  // TODO: we may actually want to race. 
+		From: d.Zone, // TODO: what does d.zone do??
+		Attempts: 3,
+		ServerSelectionPolicy: &fanout.SequentialPolicy{},
+		Next: d.Next,
+		//ExcludeDomains        Domain
+		// TODO: init workers properly
+		//TapPlugin:            *dnstap.Dnstap, // TODO: setup tap plugin
+	}
+
+	for _, provider := range d.meshProviders {
+		//provider.MeshDnsHosts()
+		hosts := provider.MeshDnsHosts()
+		for _, host := range hosts {
+			log.Infof("Add client: %s", host.Location.String())
+			f.AddClient(fanout.NewClient(host.Location.String(), fanout.UDP))
+		}
+	}
+
+	// TODO: set max workers... 
+
+	return f
+}
+
+func (d *DnsMesh) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	log.Infof("Received request for name: %v", r.Question[0].Name)
+
+	f := d.CreateFanout()
+
+	return f.ServeDNS(ctx, w, r)
+}
+

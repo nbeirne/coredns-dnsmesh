@@ -1,0 +1,124 @@
+
+
+# note: the synology version of docker is pretty old. Update it using the following:
+# mv /var/packages/ContainerManager/target/usr/bin/docker-compose /var/packages/ContainerManager/target/usr/bin/docker-compose.bak
+# curl -L $(https://github.com/docker/compose/releases/download/v2.30.2/docker-compose-`uname -s`-`uname -m` | tr "[:upper:]" "[:lower:]")  -o /var/packages/ContainerManager/target/usr/bin/docker-compose /var/packages/ContainerManager/target/usr/bin/docker-compose
+
+
+services:
+
+  coredns-1:
+    build: 
+      dockerfile: "Dockerfile"
+      additional_contexts:
+        src: "../"
+    #depends_on:
+    #  traefik-1:
+    #    condition: "service_healthy"
+    ports:
+      - '1153:53/tcp'
+      - '1153:53/udp'
+      - '1253:1053/tcp'
+      - '1253:1053/udp'
+      - '1353:1353/tcp'
+      - '1353:1353/udp'
+    volumes:
+      - ./Corefile:/Corefile
+      #- tailscale_data_1:/var/lib/tailscale
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_proxy_1
+    cap_add:
+      - net_admin
+      - sys_module
+    environment:
+      DNS_HOSTNAME: "coredns-1"
+    env_file:
+      - .env.container
+
+  #traefik-1:
+  #  image: "traefik:v3.2.0"
+  #  container_name: traefik-1
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock:ro
+  #  environment:
+  #    DOMAIN_NAME: "example.com"
+  #    TZ: "America/Toronto"
+  #  ports:
+  #    - '80:80'
+  #  networks:
+  #    traefik_proxy_1:
+  #  command:
+  #    - "--log.level=INFO"
+  #    - "--api.insecure=false"
+  #    - "--providers.docker=true"
+  #    - "--providers.docker.exposedbydefault=false"
+  #    - "--providers.docker.network=traefik_proxy_1"
+  #    - "--ping=true"
+  #    - "--entrypoints.web.address=:80"
+
+  #    - "--entrypoints.api.address=:9999"
+
+  #  restart: "unless-stopped"
+  #  labels:
+  #    traefik.enable: true
+  #    traefik.http.routers.dashboard.rule: "Host(`traefik-1`)"
+  #    #traefik.http.routers.dashboard.service: "api@internal"
+  #    traefik.http.routers.dashboard.service: "dashboard@internal"
+  #    traefik.http.routers.api.rule: "Host(`traefik-1`)"
+  #    traefik.http.routers.api.service: api@internal
+  #    traefik.http.routers.api.entrypoints: api
+  #    traefik.http.services.api.loadbalancer.server.port: 9999 # Or your chosen API port
+  #  hostname: "traefik"
+  #  healthcheck:
+  #    test: ["CMD", "traefik" ,"healthcheck", "--ping"]
+  #    interval: 3s
+  #    timeout: 3s
+  #    retries: 30
+
+  ## curl --proxy localhost:80 whoami1.example.com
+  #whoami-1:
+  #  image: "traefik/whoami:v1.10"
+  #  networks:
+  #    - traefik_proxy_1
+  #  command:
+  #    - "--port=80"
+  #    - "--name=iamfoo"
+  #  labels:
+  #    traefik.enable: true
+  #    traefik.http.routers.whoami.rule: "Host(`whoami1.example.com`)"
+  #  hostname: "whoami"
+
+
+
+  #coredns-2:
+  #  build: 
+  #    dockerfile: "Dockerfile"
+  #    additional_contexts:
+  #      src: "../"
+  #  ports:
+  #    - '2253:53/tcp'
+  #    - '2253:53/udp'
+  #  #  - '1053:1053/tcp'
+  #  #  - '1053:1053/udp'
+  #  #  #- '5353:5353/tcp'
+  #  #  #- '5353:5353/udp'
+  #  volumes:
+  #    - ./Corefile:/Corefile
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #    - tailscale-data:/var/lib/tailscale
+  #  cap_add:
+  #    - net_admin
+  #    - sys_module
+  #  environment:
+  #    DNS_HOSTNAME: "coredns-2"
+  #  env_file:
+  #    - .env.container
+
+#volumes:
+#  tailscale_data_1:
+#    driver: local
+
+networks:
+  traefik_proxy_1:
+    name: traefik_proxy_1

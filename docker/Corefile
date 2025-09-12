@@ -1,0 +1,39 @@
+.:53 {
+
+  dnsmesh example.com {
+  }
+
+  log 
+  debug
+  errors
+}
+
+.:1053 {
+  hosts {
+    1.1.1.1 host0.example.com
+  }
+  whoami
+  log 
+  debug 
+  errors
+}
+
+#.:1353 {
+#  ## access traefik through the local docker network (must use full name)
+#  #traefik http://traefik-1:9999/api {
+#  #  cname {$DNS_HOSTNAME}.ts.example.com.
+#  #  refreshinterval 30
+#  #  ttl 30
+#  #  fallthrough
+#  #}
+#
+#  finalize max_depth 1
+#
+#  log 
+#  debug 
+#  errors
+#}
+
+# TODO: turn on dnsmesh
+# TODO: traefik HTTPS (can a FQDN at my domain be resolved through docker networking?)
+# TODO: traefik cname (which IP to use?)

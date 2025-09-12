@@ -7,7 +7,7 @@ import (
 )
 
 // init registers this plugin.
-func init() { plugin.Register("dnsmesh_tailscale", setup) }
+func init() { plugin.Register("dnsmesh", setup) }
 
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
@@ -19,7 +19,7 @@ func setup(c *caddy.Controller) error {
 
 		args := c.RemainingArgs()
 		if len(args) != 1 {
-			return plugin.Error("dnsmesh_tailscale", c.ArgErr())
+			return plugin.Error("dnsmesh", c.ArgErr())
 		}
 		d.Zone = args[0]
 
@@ -30,7 +30,7 @@ func setup(c *caddy.Controller) error {
 		//		d.fall.SetZonesFromArgs(c.RemainingArgs())
 
 			default:
-				return plugin.Error("tailscale", c.ArgErr())
+				return plugin.Error("dnsmesh", c.ArgErr())
 			}
 		}
 	}

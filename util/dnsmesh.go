@@ -1,15 +1,12 @@
-package dnsmesh
+package util
 
 import (
-	"context"
 	"time"
 
 	"net/netip"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/networkservicemesh/fanout"
-	"github.com/miekg/dns"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
 
 
@@ -32,27 +29,11 @@ type DnsMesh struct {
 	Zone string
 	Next plugin.Handler
 
-	meshProviders []MeshProvider
+	MeshProviders []MeshProvider
 }
 
 func (d *DnsMesh) AddMeshProvider(meshProvider MeshProvider) {
-	d.meshProviders = append(d.meshProviders, meshProvider)
-}
-
-var log = clog.NewWithPlugin("dnsmesh")
-
-// Name implements the Handler interface.
-func (d *DnsMesh) Name() string { return "dnsmesh" }
-
-func (d *DnsMesh) Start() error {
-	for _, provider := range d.meshProviders {
-		err := provider.Start()
-		if (err != nil) {
-			return err
-		}
-	}
-
-	return nil
+	d.MeshProviders = append(d.MeshProviders, meshProvider)
 }
 
 func (d *DnsMesh) CreateFanout() *fanout.Fanout {
@@ -69,25 +50,15 @@ func (d *DnsMesh) CreateFanout() *fanout.Fanout {
 		//TapPlugin:            *dnstap.Dnstap, // TODO: setup tap plugin
 	}
 
-	for _, provider := range d.meshProviders {
+	for _, provider := range d.MeshProviders {
 		//provider.MeshDnsHosts()
 		hosts := provider.MeshDnsHosts()
 		for _, host := range hosts {
-			log.Infof("Add client: %s", host.Location.String())
 			f.AddClient(fanout.NewClient(host.Location.String(), fanout.UDP))
 		}
 	}
 
 	// TODO: set max workers... 
-
 	return f
-}
-
-func (d *DnsMesh) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	log.Infof("Received request for name: %v", r.Question[0].Name)
-
-	f := d.CreateFanout()
-
-	return f.ServeDNS(ctx, w, r)
 }
 

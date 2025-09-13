@@ -17,9 +17,11 @@ RUN apk add git make bind-tools && \
     sed -i s/forward:forward/finalize:finalize\\ntraefik:traefik\\ntailscale:tailscale\\nforward:forward/ /go/src/coredns/plugin.cfg && \
     make check && go build
 
-COPY --from=src .. /go/src/coredns/plugin/dnsmesh
-RUN rm /go/src/coredns/plugin/dnsmesh/go.mod /go/src/coredns/plugin/dnsmesh/go.sum && \
-    sed -i s/forward:forward/dnsmesh:dnsmesh\\nforward:forward/ /go/src/coredns/plugin.cfg && \
+COPY --from=src . /go/src/coredns-dnsmesh
+RUN cp -r /go/src/coredns-dnsmesh/test_provider /go/src/coredns/plugin/dnsmesh-test-provider && \
+    go mod edit -replace github.com/nbeirne/coredns-dnsmesh/util=/go/src/coredns-dnsmesh/util && \
+    rm /go/src/coredns/plugin/dnsmesh-test-provider/go.mod /go/src/coredns/plugin/dnsmesh-test-provider/go.sum && \
+    sed -i s/forward:forward/dnsmesh-test-provider:dnsmesh-test-provider\\nforward:forward/ /go/src/coredns/plugin.cfg && \
     make check && go build
 
 FROM alpine:3.21.3

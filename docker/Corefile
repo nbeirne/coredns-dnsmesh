@@ -1,11 +1,11 @@
 .:53 {
 
-  dnsmesh example.com {
+  dnsmesh-test-provider . {
   }
 
-  log 
-  debug
-  errors
+  #log 
+  #debug
+  #errors
 }
 
 .:1053 {
@@ -16,6 +16,9 @@
   log 
   debug 
   errors
+
+
+  reload
 }
 
 #.:1353 {

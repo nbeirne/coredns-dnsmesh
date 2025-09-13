@@ -1,48 +1,50 @@
-package dnsmesh
+package test_provider
 
 import (
+	"github.com/nbeirne/coredns-dnsmesh/util"
+
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 )
 
 // init registers this plugin.
-func init() { plugin.Register("dnsmesh", setup) }
+func init() { plugin.Register("dnsmesh-test-provider", setup) }
 
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
 func setup(c *caddy.Controller) error {
-	d := &DnsMesh{}
-	d.meshProviders = []MeshProvider{}
+	t := &TestProvider{}
+	t.dnsMesh = util.DnsMesh{}
 
 	for c.Next() {
 
 		args := c.RemainingArgs()
 		if len(args) != 1 {
-			return plugin.Error("dnsmesh", c.ArgErr())
+			return plugin.Error("dnsmesh-test-provider", c.ArgErr())
 		}
-		d.Zone = args[0]
+		t.dnsMesh.Zone = args[0]
 
 		for c.NextBlock() {
 			switch c.Val() {
 
 		//	case "fallthrough": // TODO: fallthrough
-		//		d.fall.SetZonesFromArgs(c.RemainingArgs())
+		//		t.fall.SetZonesFromArgs(c.RemainingArgs())
 
 			default:
-				return plugin.Error("dnsmesh", c.ArgErr())
+				return plugin.Error("dnsmesh-test-provider", c.ArgErr())
 			}
 		}
 	}
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		d.Next = next
-		if err := d.Start(); err != nil {
+		t.dnsMesh.Next = next
+		if err := t.Start(); err != nil {
 			log.Error(err)
 			return nil
 		}
-		return d
+		return t
 	})
 
 	// All OK, return a nil error.

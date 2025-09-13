@@ -1,6 +1,6 @@
-module github.com/nbeirne/coredns-dnsmesh
+module github.com/nbeirne/coredns-dnsmesh/util
 
-go 1.24.3
+go 1.24.2
 
 require (
 	github.com/celebdor/zeroconf v0.0.0-20210412110229-8ba34664402f
@@ -99,3 +99,5 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gvisor.dev/gvisor v0.0.0-20250205023644-9414b50a5633 // indirect
 )
+
+replace github.com/nbeirne/dnsmesh/util => ../util

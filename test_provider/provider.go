@@ -4,7 +4,6 @@ import (
 	"github.com/nbeirne/coredns-dnsmesh/util"
 
 	"context"
-	"net/netip"
 
 	//"github.com/coredns/coredns/plugin"
 	"github.com/miekg/dns"
@@ -12,13 +11,14 @@ import (
 )
 
 type TestProvider struct {
+	hosts []util.DnsHost
 	dnsMesh util.DnsMesh
 }
 
-var log = clog.NewWithPlugin("dnsmesh-test-provider")
+var log = clog.NewWithPlugin("dnsmesh_test_provider")
 
 // Name implements the Handler interface.
-func (t *TestProvider) Name() string { return "dnsmesh-test-provider" }
+func (t *TestProvider) Name() string { return "dnsmesh_test_provider" }
 
 func (t *TestProvider) Start() error {
 	t.dnsMesh.AddMeshProvider(t)
@@ -35,8 +35,6 @@ func (t *TestProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dn
 
 func (t *TestProvider) MeshDnsHosts() []util.DnsHost {
 	log.Infof("create mesh host.. providers: %s", t.dnsMesh.MeshProviders)
-	return []util.DnsHost{
-		{ Location: netip.MustParseAddrPort("127.0.0.1:1053") },
-	}
+	return t.hosts
 }
 

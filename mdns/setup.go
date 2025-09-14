@@ -1,4 +1,4 @@
-package test_provider
+package mdns
 
 import (
 	"github.com/nbeirne/coredns-dnsmesh/util"
@@ -11,12 +11,12 @@ import (
 )
 
 // init registers this plugin.
-func init() { plugin.Register("dnsmesh_test_provider", setup) }
+func init() { plugin.Register("dnsmesh_mdns", setup) }
 
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
 func setup(c *caddy.Controller) error {
-	t := &TestProvider{}
+	t := &MdnsProvider{}
 	t.hosts = []util.DnsHost{}
 	t.dnsMesh = util.DnsMesh{}
 
@@ -24,7 +24,7 @@ func setup(c *caddy.Controller) error {
 
 		args := c.RemainingArgs()
 		if len(args) != 1 {
-			return plugin.Error("dnsmesh_test_provider", c.ArgErr())
+			return plugin.Error("dnsmesh_mdns", c.ArgErr())
 		}
 		t.dnsMesh.Zone = args[0]
 

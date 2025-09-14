@@ -1,6 +1,11 @@
 .:53 {
 
-  dnsmesh-test-provider . {
+  dnsmesh_test_provider t.example.com. {
+    127.0.0.1:1053
+  }
+
+  dnsmesh_mdns m.example.com. {
+    127.0.0.1:1053
   }
 
   #log 
@@ -10,13 +15,16 @@
 
 .:1053 {
   hosts {
-    1.1.1.1 host0.example.com
+    0.0.0.0 example.com
+    1.1.1.1 host0.x.example.com
+    2.2.2.2 host0.t.example.com
+    3.3.3.3 host0.m.example.com
+    4.4.4.4 host0.ts.example.com
   }
   whoami
   log 
   debug 
   errors
-
 
   reload
 }

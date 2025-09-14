@@ -26,8 +26,9 @@ services:
       - ./Corefile:/Corefile
       #- tailscale_data_1:/var/lib/tailscale
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - traefik_proxy_1
+    network_mode: host
+    #networks:
+    #  - traefik_proxy_1
     cap_add:
       - net_admin
       - sys_module

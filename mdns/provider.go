@@ -17,6 +17,8 @@ import (
 	//"github.com/openshift/mdns-publisher/pkg/publisher" // TODO: publish??
 )
 
+// TODO: avahi vs zeroconf lib???
+
 type MdnsProvider struct {
 	dnsMesh util.DnsMesh
 

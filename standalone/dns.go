@@ -85,6 +85,7 @@ var directives = []string{
 	// loop:loop
 	"dnsmesh_test_provider",
 	"dnsmesh_mdns",
+	"dnsmesh_mdns_advertise",
 	"forward",
 	"fanout",
 	// grpc:grpc

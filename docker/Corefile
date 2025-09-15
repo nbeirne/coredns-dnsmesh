@@ -1,11 +1,12 @@
 .:53 {
 
-  dnsmesh_test_provider t.example.com. {
-    127.0.0.1:1053
-  }
+  #dnsmesh_test_provider t.example.com. {
+  #  127.0.0.1:1053
+  #}
 
   dnsmesh_mdns m.example.com. {
-    127.0.0.1:1053
+    iface_bind_subnet 192.168.2.1/24
+    #filter ".*"
   }
 
   #log 
@@ -14,6 +15,10 @@
 }
 
 .:1053 {
+  dnsmesh_mdns_advertise {
+    iface_bind_subnet 192.168.2.1/24
+  }
+
   hosts {
     0.0.0.0 example.com
     1.1.1.1 host0.x.example.com

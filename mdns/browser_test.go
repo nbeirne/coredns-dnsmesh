@@ -48,10 +48,12 @@ func newEntry(instanceName string, ttl uint32) (entry *zeroconf.ServiceEntry) {
 func TestDnsBrowser(t *testing.T) {
 
 	testCases := [] struct {
+		name        string
 		input    []*zeroconf.ServiceEntry
 		expected []*zeroconf.ServiceEntry
 	}{
-		{   // standard
+		{
+			name: "basic",
 			input: 	  []*zeroconf.ServiceEntry { 
 				newEntry("host0", 120),
 			},
@@ -59,7 +61,8 @@ func TestDnsBrowser(t *testing.T) {
 				newEntry("host0", 120),
 			},
 		},
-		{   // two hosts TTL
+		{
+			name: "two_hosts",
 			input: 	  []*zeroconf.ServiceEntry { 
 				newEntry("host0", 120),
 				newEntry("host1", 100),
@@ -69,7 +72,8 @@ func TestDnsBrowser(t *testing.T) {
 				newEntry("host1", 100),
 			},
 		},
-		{   // updated TTL
+		{
+			name: "updated_host",
 			input: 	  []*zeroconf.ServiceEntry { 
 				newEntry("host0", 120),
 				newEntry("host0", 100),
@@ -79,10 +83,22 @@ func TestDnsBrowser(t *testing.T) {
 				newEntry("host0", 90),
 			},
 		},
+		{
+			name: "ttl_expired",
+			input: 	  []*zeroconf.ServiceEntry { 
+				newEntry("host0", 120),
+				newEntry("host1", 100),
+				newEntry("host0", 0),
+			},
+			expected: []*zeroconf.ServiceEntry { 
+				newEntry("host1", 100),
+			},
+		},
+
 		// TODO: remove entry with 0 TTL
 	}
 
-	for testCase, tc := range testCases {
+	for _, tc := range testCases {
 		browser := NewMdnsBrowser("_type", nil)
 		browser.zeroConfImpl = fakeZeroconf{tc.input}
 
@@ -94,15 +110,15 @@ func TestDnsBrowser(t *testing.T) {
 		sort.Sort(ByInstance(tc.expected))
 
 		if len(resultServices) != len(tc.expected) {
-			t.Errorf("Unexpected result in test %d, result is different length than expected (%d != %d)", testCase, len(resultServices), len(tc.expected))
+			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
 		}
 
 		for idx := range resultServices {
 			if resultServices[idx].HostName != tc.expected[idx].HostName {
-				t.Errorf("Unexpected result in test %d, hostname at %d is different expected (%s != %s)", testCase, idx, resultServices[idx].HostName, tc.expected[idx].HostName)
+				t.Errorf("Unexpected result in test %s, hostname at %d is different expected (%s != %s)", tc.name, idx, resultServices[idx].HostName, tc.expected[idx].HostName)
 			}
 			if resultServices[idx].TTL != tc.expected[idx].TTL {
-				t.Errorf("Unexpected result in test %d, ttl at %d is different expected (%d != %d)", testCase, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
+				t.Errorf("Unexpected result in test %s, ttl at %d is different expected (%d != %d)", tc.name, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
 			}
 		}
 	}

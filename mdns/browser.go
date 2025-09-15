@@ -2,8 +2,10 @@ package mdns
 
 import (
 	"context"
+	"maps"
 	"net"
 	"sync"
+	"slices"
 	"time"
 
 	"github.com/celebdor/zeroconf"
@@ -21,11 +23,14 @@ type MdnsBrowserInterface interface {
 type MdnsBrowser struct {
 	mdnsType       	 string
 	ifaceBindSubnet *net.IPNet // subnet to search on
-	startOnce       sync.Once
-	stopCh          chan struct{}
+
+	zeroConfImpl     ZeroconfInterface
+
+	startOnce        sync.Once
+	stopCh           chan struct{}
 
 	mutex           *sync.RWMutex
-	services      []*zeroconf.ServiceEntry
+	services        *map[string]*zeroconf.ServiceEntry
 }
 
 func NewMdnsBrowser(mdnsType string, ifaceBindSubnet *net.IPNet) (browser MdnsBrowser) {
@@ -33,7 +38,11 @@ func NewMdnsBrowser(mdnsType string, ifaceBindSubnet *net.IPNet) (browser MdnsBr
 	browser.mdnsType = mdnsType
 	browser.ifaceBindSubnet = ifaceBindSubnet
 
-	browser.services = []*zeroconf.ServiceEntry{}
+	browser.zeroConfImpl = ZeroconfImpl{}
+
+	services := make(map[string]*zeroconf.ServiceEntry)
+	browser.services = &services
+
 	mutex := sync.RWMutex{}
 	browser.mutex = &mutex
 	browser.stopCh = make(chan struct{})
@@ -56,7 +65,7 @@ func (m *MdnsBrowser) Services() []*zeroconf.ServiceEntry {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	services := m.services
+	services := slices.Collect(maps.Values(*(m.services)))
 	return services
 }
 
@@ -76,14 +85,14 @@ func (m *MdnsBrowser) browseLoop() {
 
 func (m *MdnsBrowser) browseMdns() {
 	entriesCh := make(chan *zeroconf.ServiceEntry)
-	mdnsServices := []*zeroconf.ServiceEntry {}
+	mdnsServices := make(map[string]*zeroconf.ServiceEntry)
 	go func(results <-chan *zeroconf.ServiceEntry) {
 		log.Debug("Retrieving mDNS entries")
 		for entry := range results {
 			// Make a copy of the entry so zeroconf can't later overwrite our changes
 			localEntry := *entry
 			log.Debugf("Service Instance: %s, HostName: %s, AddrIPv4: %s, AddrIPv6: %s Port: %d, TTL: %d\n", localEntry.Instance, localEntry.HostName, localEntry.AddrIPv4, localEntry.AddrIPv6, localEntry.Port, localEntry.TTL)
-			mdnsServices = append(mdnsServices, &localEntry)
+			mdnsServices[localEntry.Instance] = &localEntry
 		}
 	}(entriesCh)
 
@@ -96,15 +105,15 @@ func (m *MdnsBrowser) browseMdns() {
 			ifaces = foundIfaces
 		}
 	}
-	_ = queryService(m.mdnsType, entriesCh, ifaces, ZeroconfImpl{})
+	_ = queryService(m.mdnsType, entriesCh, ifaces, m.zeroConfImpl)
 
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	// Copy values into the shared maps only after we've collected all of them.
 	// This prevents us from having to lock during the entire mdns browse time.
-	m.services = mdnsServices
-	log.Infof("Found %d mdns hosts", len(m.services))
+	m.services = &mdnsServices
+	log.Infof("Found %d mdns hosts", len(mdnsServices))
 }
 
 

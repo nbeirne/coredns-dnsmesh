@@ -57,7 +57,7 @@ func setupQuery(c *caddy.Controller) error {
 				}
 				_, subnet, err := net.ParseCIDR(remaining[0])
 				if err != nil {
-					return c.Errf("Failed to parse subnet: %w", err)
+					return c.Errf("Failed to parse subnet: %s", remaining[0])
 				}
 				ifaceBindSubnet = subnet
 
@@ -68,7 +68,7 @@ func setupQuery(c *caddy.Controller) error {
 				}
 				filter, err := regexp.Compile(remaining[0])
 				if err != nil {
-					return c.Errf("Failed to compile regex: %w", err)
+					return c.Errf("Failed to compile regex: %s", remaining[0])
 				}
 				t.filter = filter
 
@@ -92,7 +92,7 @@ func setupQuery(c *caddy.Controller) error {
 				}
 				addrsPerHostInt, err := strconv.Atoi(remaining[0])
 				if err != nil {
-					return c.Errf("addresses_per_host could not be parsed: %w", err)
+					return c.Errf("addresses_per_host could not be parsed: %s", remaining[0])
 				}
 				t.addrsPerHost = addrsPerHostInt
 
@@ -128,6 +128,7 @@ func setupQuery(c *caddy.Controller) error {
 func setupAdvertise(c *caddy.Controller) error {
 	// Defaults
 	mdnsType := DefaultServiceType
+	ttl := DefaultTTL
 
 	shortHostname, err := getShortHostname()
 	if (err != nil) {
@@ -166,9 +167,20 @@ func setupAdvertise(c *caddy.Controller) error {
 			}
 			portInt, err := strconv.Atoi(remaining[0])
 			if err != nil {
-				return c.Errf("port provided is invalid: %w", err)
+				return c.Errf("port provided is invalid: %s", remaining[0])
 			}
 			port = portInt
+
+		case "ttl":
+			remaining := c.RemainingArgs()
+			if len(remaining) != 1 {
+				return c.Errf("ttl needs to exist")
+			}
+			ttlInt, err := strconv.ParseUint(remaining[0], 10, 32)
+			if err != nil {
+				return c.Errf("ttl provided is invalid: %s", remaining[0])
+			}
+			ttl = uint32(ttlInt)
 
 		case "iface_bind_subnet": 
 			remaining := c.RemainingArgs()
@@ -177,7 +189,7 @@ func setupAdvertise(c *caddy.Controller) error {
 			}
 			_, subnet, err := net.ParseCIDR(remaining[0])
 			if err != nil {
-				return c.Errf("Failed to parse subnet: %w", err)
+				return c.Errf("Failed to parse subnet: %s", remaining[0])
 			}
 			ifaceBindSubnet = subnet
 
@@ -187,7 +199,7 @@ func setupAdvertise(c *caddy.Controller) error {
 	}
 
 	// TODO: configure
-	advertiser := NewMdnsAdvertise(instanceName, mdnsType, port)
+	advertiser := NewMdnsAdvertise(instanceName, mdnsType, port, ttl)
 	advertiser.BindToSubnet(ifaceBindSubnet)
 
 	c.OnStartup(func () error {
@@ -222,7 +234,7 @@ func getServerPort(c *caddy.Controller) (int, error) {
 	urlStr := keys[0]
 	url, err := url.Parse(urlStr)
 	if err != nil {
-		log.Errorf("Error parsing port from address %s: %w", urlStr, err)
+		log.Errorf("Error parsing port from address %s", urlStr)
 		return 0, err
 	}
 

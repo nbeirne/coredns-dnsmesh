@@ -14,19 +14,21 @@ type MdnsAdvertise struct {
 	service  	 string
 	domain   	 string
 	port      	 int
+	ttl 		 uint32
 	txtEntries []string
 	ifaceBindSubnet *net.IPNet // subnet to search on
 
 	server 		*zeroconf.Server
 }
 
-func NewMdnsAdvertise(instanceName, service string, port int) *MdnsAdvertise {
+func NewMdnsAdvertise(instanceName, service string, port int, ttl uint32) *MdnsAdvertise {
 	return &MdnsAdvertise{
 		advertise:     true,
 		instanceName:  instanceName,
 		service:  	   service,
 		domain:        "local.", // always use local. Technically this may be different, but resolvers dont generally respect other values.
 		port:          port,
+		ttl: 		   120,
 	}
 }
 
@@ -67,6 +69,8 @@ func (m *MdnsAdvertise) StartAdvertise() error {
 		m.txtEntries,
 		ifaces,
 	)
+	server.TTL(m.ttl) // refresh every 2 mins
+
 	if err != nil {
 		log.Errorf("Error staring advertisement: %s", err)
 		return err

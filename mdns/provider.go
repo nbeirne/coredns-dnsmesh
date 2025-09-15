@@ -41,7 +41,7 @@ var log = clog.NewWithPlugin("dnsmesh_mdns")
 func (m *MdnsProvider) Name() string { return QueryPluginName }
 
 func (m *MdnsProvider) Start() error {
-	log.Infof("Starting meshdns: %w", m.filter)
+	log.Infof("Starting meshdns...")
 
 	m.dnsMesh.AddMeshProvider(m)
 

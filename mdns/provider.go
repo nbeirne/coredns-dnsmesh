@@ -4,50 +4,48 @@ import (
 	"github.com/nbeirne/coredns-dnsmesh/util"
 
 	"context"
-	"time"
-	"strings"
 	"net"
-	"sync"
+	"net/netip"
+	"regexp"
 
-	//"github.com/coredns/coredns/plugin"
 	"github.com/miekg/dns"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	"github.com/celebdor/zeroconf"
-	//"github.com/openshift/mdns-publisher/pkg/publisher" // TODO: publish??
 )
-
-// TODO: avahi vs zeroconf lib???
 
 type MdnsProvider struct {
 	dnsMesh util.DnsMesh
 
-	mdnsType    string
-	filter      string // TODO: filter???
+	browser       *MdnsBrowser
 
-	mutex       *sync.RWMutex
-	mdnsHosts   *map[string]*zeroconf.ServiceEntry
-	hosts []util.DnsHost
+	filter        *regexp.Regexp
+	addrMode       int
+	addrsPerHost   int
 }
+
+const (
+	PreferIPv6 int = 0
+	PreferIPv4     = 1
+	IPv6Only	   = 2
+	IPv4Only 	   = 3
+)
+
+// TODO: configure all settings
+// TODO: fanout settings
+
 
 var log = clog.NewWithPlugin("dnsmesh_mdns")
 
 // Name implements the Handler interface.
-func (m *MdnsProvider) Name() string { return "dnsmesh_mdns" }
+func (m *MdnsProvider) Name() string { return QueryPluginName }
 
 func (m *MdnsProvider) Start() error {
+	log.Infof("Starting meshdns: %w", m.filter)
+
 	m.dnsMesh.AddMeshProvider(m)
 
-	m.mdnsType = "_airplay._tcp" // TODO: configure
-
-	mdnsHosts := make(map[string]*zeroconf.ServiceEntry)
-	mutex := sync.RWMutex{}
-
-	m.mdnsHosts = &mdnsHosts
-	m.mutex = &mutex // TODO: ptr??
-
-	go browseLoop(m)
-	// start browsing for mdns servers
+	m.browser.Start()
 
 	return nil
 }
@@ -56,107 +54,67 @@ func (m *MdnsProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dn
 	log.Infof("Received request for name: %v", r.Question[0].Name)
 
 	f := m.dnsMesh.CreateFanout()
-
 	return f.ServeDNS(ctx, w, r)
 }
 
-func (m *MdnsProvider) MeshDnsHosts() []util.DnsHost {
-	log.Infof("create mesh host.. providers: %s", m.dnsMesh.MeshProviders)
-	return m.hosts
-}
+func (m *MdnsProvider) MeshDnsHosts() (outputHosts []util.DnsHost) {
+	services := m.browser.Services()
 
-
-
-func browseLoop(m *MdnsProvider) {
-	for {
-		m.BrowseMDNS()
-		// 5 seconds seems to be the minimum ttl that the cache plugin will allow
-		// Since each browse operation takes around 2 seconds, this should be fine
-		// TODO: caching strategy????
-		time.Sleep(5 * time.Second)
-	}
-}
-
-func (m *MdnsProvider) BrowseMDNS() {
-	entriesCh := make(chan *zeroconf.ServiceEntry)
-	mdnsHosts := make(map[string]*zeroconf.ServiceEntry)
-	go func(results <-chan *zeroconf.ServiceEntry) {
-		log.Debug("Retrieving mDNS entries")
-		for entry := range results {
-			// Make a copy of the entry so zeroconf can't later overwrite our changes
-			localEntry := *entry
-			log.Debugf("A Instance: %s, HostName: %s, AddrIPv4: %s, AddrIPv6: %s Port: %d\n", localEntry.Instance, localEntry.HostName, localEntry.AddrIPv4, localEntry.AddrIPv6, localEntry.Port)
-			if strings.Contains(localEntry.Instance, m.filter) {
-				mdnsHosts[localEntry.HostName] = entry
-			} else {
-				log.Debugf("Ignoring entry '%s' because it doesn't match filter '%s'\n",
-					localEntry.Instance, m.filter)
-			}
+	for _, service := range services {
+		hosts := m.hostsForZeroconfServiceEntry(service)
+		for _, host := range hosts {
+			log.Infof("Found host for instance %s: %s", service.Instance, host.String())
+			outputHosts = append(outputHosts, util.DnsHost{Location: host})
 		}
-	}(entriesCh)
+	}
 
-	var iface net.Interface
-	//if m.bindAddress != "" { // TODO: bind???
-	//	foundIface, err := publisher.FindIface(net.ParseIP(m.bindAddress))
-	//	if err != nil {
-	//		log.Errorf("Failed to find interface for '%s'\n", m.bindAddress)
-	//	} else {
-	//		iface = foundIface
-	//	}
-	//}
-	_ = queryService(m.mdnsType, entriesCh, iface, ZeroconfImpl{})
-
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	// Clear maps so we don't have stale entries
-	for k := range *m.mdnsHosts {
-		delete(*m.mdnsHosts, k)
-	}
-	// Copy values into the shared maps only after we've collected all of them.
-	// This prevents us from having to lock during the entire mdns browse time.
-	for k, v := range mdnsHosts {
-		(*m.mdnsHosts)[k] = v
-	}
-	log.Infof("mdnsHosts: %v", m.mdnsHosts)
-	for name, entry := range *m.mdnsHosts {
-		log.Debugf("%s: %v", name, entry)
-	}
-}
-
-func queryService(service string, channel chan *zeroconf.ServiceEntry, iface net.Interface, z ZeroconfInterface) error {
-	var opts zeroconf.ClientOption
-	if iface.Name != "" {
-		opts = zeroconf.SelectIfaces([]net.Interface{iface})
-	}
-	resolver, err := z.NewResolver(opts)
-	if err != nil {
-		log.Errorf("Failed to initialize %s resolver: %s", service, err.Error())
-		return err
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	err = resolver.Browse(ctx, service, "local.", channel)
-	if err != nil {
-		log.Errorf("Failed to browse %s records: %s", service, err.Error())
-		return err
-	}
-	<-ctx.Done()
-	return nil
+	return outputHosts
 }
 
 
-// allow for mocking in tests
-type ZeroconfInterface interface {
-	NewResolver(...zeroconf.ClientOption) (ResolverInterface, error)
-}
+func (m *MdnsProvider) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
+	if m.filter != nil && !m.filter.MatchString(entry.Instance) {
+		log.Errorf("Ignoring entry '%s' because the instance name did not match the filter: '%s'",
+				entry.Instance, m.filter.String())
+		return []netip.AddrPort{}
+	}
 
-type ZeroconfImpl struct{}
+	ips := []net.IP{}
+	if m.addrMode == PreferIPv6 {
+		ips = append(ips, entry.AddrIPv6...)
+		ips = append(ips, entry.AddrIPv4...)
+	} else if m.addrMode == PreferIPv4 {
+		ips = append(ips, entry.AddrIPv4...)
+		ips = append(ips, entry.AddrIPv6...)
+	} else if m.addrMode == IPv6Only {
+		ips = append(ips, entry.AddrIPv6...)
+	} else if m.addrMode == IPv4Only {
+		ips = append(ips, entry.AddrIPv4...)
+	}
 
-func (z ZeroconfImpl) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
-	return zeroconf.NewResolver(opts...)
-}
+	for idx, ip := range ips {
+		if idx >= m.addrsPerHost {
+			break
+		}
 
-type ResolverInterface interface {
-	Browse(context.Context, string, string, chan<- *zeroconf.ServiceEntry) error
+		// Ignore "self" IPs
+		//iface, err := util.FindInterfaceForAddress(ip)
+		//if err == nil {
+		//	log.Debugf("Ignoring entry '%s' because the interface %s has the ip %s",
+		//		entry.Instance, iface.Name, ip.String())
+		//	continue // Skip this IP, it's local
+		//}
+
+		addr, ok := netip.AddrFromSlice(ip)
+		port := uint16(entry.Port)
+		if !ok {
+			log.Errorf("Ignoring entry '%s' because the address was not able to be parsed",
+				entry.Instance)
+			continue
+		}
+		hosts = append(hosts, netip.AddrPortFrom(addr, port))
+	}
+
+	return hosts
 }
 

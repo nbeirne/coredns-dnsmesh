@@ -1,5 +1,5 @@
 
-package util
+package mdns
 
 import (
 	"net"

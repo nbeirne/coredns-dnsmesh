@@ -1,28 +1,20 @@
 package mdns
 
 import (
-	"github.com/nbeirne/coredns-dnsmesh/util"
-
 	"context"
 	"net"
 	"net/netip"
+	"time"
 	"regexp"
 
 	"github.com/miekg/dns"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	"github.com/celebdor/zeroconf"
+
+	"github.com/coredns/coredns/plugin"
+	"github.com/networkservicemesh/fanout"
 )
-
-type MdnsProvider struct {
-	dnsMesh util.DnsMesh
-
-	browser       *MdnsBrowser
-
-	filter        *regexp.Regexp
-	addrMode       int
-	addrsPerHost   int
-}
 
 const (
 	PreferIPv6 int = 0
@@ -31,7 +23,27 @@ const (
 	IPv4Only 	   = 3
 )
 
-// TODO: configure all settings
+type MdnsProvider struct {
+	// fanout
+	Timeout               time.Duration 	// overall timeout for a whole request
+	Zone                  string 			// only process requests to this domain
+	Attempts              int 				// attempts per server
+	WorkerCount           int 				// number of requests to run in parallel
+	Next                  plugin.Handler    // next plugin if req not in zone or it is an excluded domains 
+	//ExcludeDomains        Domain 			  // TODO??  exclude domains from the fanout
+	//ServerSelectionPolicy 	 			  // TODO??  select which servers are requested first
+	// TODO: fallthrough on error?
+
+
+	// internal filters
+	filter        *regexp.Regexp
+	ignoreSelf 	   bool
+	addrMode       int
+	addrsPerHost   int
+
+	browser       *MdnsBrowser
+}
+
 // TODO: fanout settings
 
 
@@ -43,32 +55,43 @@ func (m *MdnsProvider) Name() string { return QueryPluginName }
 func (m *MdnsProvider) Start() error {
 	log.Infof("Starting meshdns...")
 
-	m.dnsMesh.AddMeshProvider(m)
-
 	m.browser.Start()
 
 	return nil
 }
 
-func (m *MdnsProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	log.Infof("Received request for name: %v", r.Question[0].Name)
+func (m *MdnsProvider) CreateFanout() *fanout.Fanout {
+	f := &fanout.Fanout {
+		Timeout: m.Timeout * time.Second,
+		ExcludeDomains: fanout.NewDomain(), // TODO - no excludes
+		Race: false,  // first to respond wins, even if !success
+		From: m.Zone,
+		Attempts: m.Attempts,
+		ServerSelectionPolicy: &fanout.SequentialPolicy{},
+		Next: m.Next,
+		WorkerCount: m.WorkerCount,
+		// TODO: init workers properly
+		//TapPlugin:            *dnstap.Dnstap, // TODO: setup tap plugin
+	}
 
-	f := m.dnsMesh.CreateFanout()
-	return f.ServeDNS(ctx, w, r)
-}
-
-func (m *MdnsProvider) MeshDnsHosts() (outputHosts []util.DnsHost) {
 	services := m.browser.Services()
-
 	for _, service := range services {
 		hosts := m.hostsForZeroconfServiceEntry(service)
 		for _, host := range hosts {
 			log.Infof("Found host for instance %s: %s", service.Instance, host.String())
-			outputHosts = append(outputHosts, util.DnsHost{Location: host})
+			f.AddClient(fanout.NewClient(host.String(), fanout.UDP))
 		}
 	}
 
-	return outputHosts
+	// TODO: set max workers... 
+	return f
+}
+
+func (m *MdnsProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	log.Infof("Received request for name: %v", r.Question[0].Name)
+
+	f := m.CreateFanout()
+	return f.ServeDNS(ctx, w, r)
 }
 
 
@@ -97,13 +120,14 @@ func (m *MdnsProvider) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry
 			break
 		}
 
-		// Ignore "self" IPs
-		//iface, err := util.FindInterfaceForAddress(ip)
-		//if err == nil {
-		//	log.Debugf("Ignoring entry '%s' because the interface %s has the ip %s",
-		//		entry.Instance, iface.Name, ip.String())
-		//	continue // Skip this IP, it's local
-		//}
+		if m.ignoreSelf {
+		    iface, err := FindInterfaceForAddress(ip)
+		    if err == nil {
+		    	log.Debugf("Ignoring entry '%s' because the interface %s has the ip %s",
+		    		entry.Instance, iface.Name, ip.String())
+		    	continue // Skip this IP, it's local
+		    }
+		}
 
 		addr, ok := netip.AddrFromSlice(ip)
 		port := uint16(entry.Port)

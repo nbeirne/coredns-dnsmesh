@@ -4,8 +4,6 @@ import (
 	"net"
 
 	"github.com/celebdor/zeroconf"
-
-	"github.com/nbeirne/coredns-dnsmesh/util"
 )
 
 type MdnsAdvertise struct {
@@ -53,7 +51,7 @@ func (m *MdnsAdvertise) StartAdvertise() error {
 
 	var ifaces []net.Interface
 	if m.ifaceBindSubnet != nil {
-		foundIfaces, err := util.FindInterfacesForSubnet(*m.ifaceBindSubnet)
+		foundIfaces, err := FindInterfacesForSubnet(*m.ifaceBindSubnet)
 		if err != nil || len(foundIfaces) == 0 {
 			log.Errorf("Failed to find interface for '%s'\n", m.ifaceBindSubnet.String())
 		} else {

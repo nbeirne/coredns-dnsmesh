@@ -11,6 +11,7 @@ const (
 	AdvertisingPrefix = "meshdns "
 	DefaultTTL uint32 = 120
 
+	DefaultTimeout = 30
 	DefaultAddrsPerHost = 1
 	DefaultAddrMode = IPv4Only
 )

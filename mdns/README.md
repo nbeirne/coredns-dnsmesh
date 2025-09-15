@@ -13,8 +13,8 @@ dig -p 5353 @224.0.0.251 bowie.local
 
 ## TODO
 
-- Figure out fanout settings **now**
-- simplify dns provider **now**
+// TODO: more robust parsing of errors (auto/setup.go)
+// TODO: parse fanout options
 
 - lots of testing **now**
     - filtering in the provider

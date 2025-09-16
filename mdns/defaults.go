@@ -7,6 +7,7 @@ import (
 
 const (
 	DefaultServiceType = "_dns._udp"
+	DefaultDomain = "local."
 
 	QueryPluginName = "dnsmesh_mdns"
 	AdvertisePluginName = "dnsmesh_mdns_advertise"

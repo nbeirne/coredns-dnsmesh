@@ -24,7 +24,7 @@ func NewMdnsAdvertise(instanceName, service string, port int, ttl uint32) *MdnsA
 		advertise:     true,
 		instanceName:  instanceName,
 		service:  	   service,
-		domain:        "local.", // always use local. Technically this may be different, but resolvers dont generally respect other values.
+		domain:        DefaultDomain, // always use local. Technically this may be different, but resolvers dont generally respect other values.
 		port:          port,
 		ttl: 		   120,
 	}

@@ -126,12 +126,10 @@ func queryService(service string, channel chan *zeroconf.ServiceEntry, ifaces []
 		log.Errorf("Failed to initialize %s resolver: %s", service, err.Error())
 		return err
 	}
-	// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	//err = resolver.Browse(context.Background(), service, "local.", channel)
-	err = resolver.Browse(ctx, service, "local.", channel)
+	err = resolver.Browse(ctx, service, DefaultDomain, channel)
 	if err != nil {
 		log.Errorf("Failed to browse %s records: %s", service, err.Error())
 		return err

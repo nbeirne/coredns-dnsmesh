@@ -13,29 +13,21 @@ dig -p 5353 @224.0.0.251 bowie.local
 
 ## TODO
 
-- lots of testing **now**
+### Now
+
+- NewMeshDnsProvider 
+
+- better strategy than a 2s browse loop
+    - browse - cache results until a TTL is hit. At that point restart the browse.
     - browsing - maintaining list when given via chan
     - browsing - removal when TTL is 0
-    - advertising - deconfliction
 
-- try out query and advertising non-local domains
+
+### Maybe or Later
+
+- Deconflicting the advertiser (ie, UUIDs or adding bracketed numbering after discovery)
 
 - TCP support (ie, not dns over udp)
 - better security w.r.t. which servers may respond to which domains.
-
-
-### Advertising
-- Deconflicting the advertiser (ie, UUIDs or adding bracketed numbering after discovery)
-
-
-### Browsing
-- better strategy than a 2s browse loop
-    - browse - cache results until a TTL is hit. At that point restart the browse.
-- remove item when TTL is 0
-- also look at port to filter out 'self' instances?? make this configurable?
-- fanout strategy
-- NewMeshDnsProvider
-
-
-### Setup and Config
+- browsing: also look at port to filter out 'self' instances?? make this configurable?
 

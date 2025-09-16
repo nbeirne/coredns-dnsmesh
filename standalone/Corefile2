@@ -1,0 +1,22 @@
+
+. {
+  dnsmesh_mdns_advertise {
+    instance_name "dnsmesh-{$MESH_ID}"
+    iface_bind_subnet 192.168.2.1/24
+  }
+
+  hosts {
+    0.0.0.0 example.com
+    1.1.1.{} host0.x.example.com
+    2.2.2.2 host0.t.example.com
+    127.0.0.{$MESH_ID} host0.m.example.com
+    4.4.4.4 host0.ts.example.com
+  }
+
+  whoami
+  log 
+  debug 
+  errors
+
+  reload
+}

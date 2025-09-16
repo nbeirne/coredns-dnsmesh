@@ -25,7 +25,7 @@ RUN echo "installing..." && \
     echo "done installing..." && \
     cp -r /go/src/coredns-dnsmesh/mdns /go/src/coredns/plugin/dnsmesh_mdns && \
     rm /go/src/coredns/plugin/dnsmesh_mdns/go.mod /go/src/coredns/plugin/dnsmesh_mdns/go.sum && \
-    sed -i s/forward:forward/dnsmesh_mdns:dnsmesh_mdns\\nforward:forward/ /go/src/coredns/plugin.cfg && \
+    sed -i s/forward:forward/dnsmesh_mdns:dnsmesh_mdns\\ndnsmesh_mdns_advertise:dnsmesh_mdns\\nforward:forward/ /go/src/coredns/plugin.cfg && \
     echo "done installing..." && \
     go mod edit -replace github.com/nbeirne/coredns-dnsmesh/util=/go/src/coredns-dnsmesh/util && \
     make check && go build

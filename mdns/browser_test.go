@@ -3,14 +3,10 @@ package mdns
 import (
 	"context"
 	"errors"
-	"net"
-	//"sync"
 	"sort"
 	"testing"
 
 	"github.com/celebdor/zeroconf"
-	//"github.com/coredns/coredns/request"
-	//"github.com/miekg/dns"
 )
 
 
@@ -26,7 +22,7 @@ func TestQueryServiceStartup(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		entriesCh := make(chan *zeroconf.ServiceEntry)
-		result := queryService("test", entriesCh, []net.Interface{}, tc.zeroconfImpl)
+		result := queryService("test", entriesCh, nil, tc.zeroconfImpl)
 		if tc.expectedError == "" {
 			if result != nil {
 				t.Errorf("Unexpected failure in %v: %v", tc.tcase, result)

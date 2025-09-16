@@ -94,13 +94,14 @@ func (m *MdnsBrowser) browseMdns() {
 		}
 	}(entriesCh)
 
-	var ifaces []net.Interface
+	var ifaces *[]net.Interface
 	if m.ifaceBindSubnet != nil {
 		foundIfaces, err := FindInterfacesForSubnet(*m.ifaceBindSubnet)
 		if err != nil || len(foundIfaces) == 0 {
 			log.Errorf("Failed to find interface for '%s'\n", m.ifaceBindSubnet.String())
+			ifaces = &([]net.Interface{})
 		} else {
-			ifaces = foundIfaces
+			ifaces = &foundIfaces
 		}
 	}
 	_ = queryService(m.mdnsType, entriesCh, ifaces, m.zeroConfImpl)
@@ -116,10 +117,10 @@ func (m *MdnsBrowser) browseMdns() {
 
 
 
-func queryService(service string, channel chan *zeroconf.ServiceEntry, ifaces []net.Interface, z ZeroconfInterface) error {
+func queryService(service string, channel chan *zeroconf.ServiceEntry, ifaces *[]net.Interface, z ZeroconfInterface) error {
 	var opts zeroconf.ClientOption
-	if len(ifaces) != 0 {
-		opts = zeroconf.SelectIfaces(ifaces)
+	if ifaces != nil {
+		opts = zeroconf.SelectIfaces(*ifaces)
 	}
 	resolver, err := z.NewResolver(opts)
 	if err != nil {

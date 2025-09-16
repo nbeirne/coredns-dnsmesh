@@ -64,7 +64,7 @@ func setupAdvertise(c *caddy.Controller) error {
 
 	port, err := getServerPort(c)
 	if (err != nil) {
-		return err
+		port = 0
 	}
 
 	ifaceBindSubnet := (*net.IPNet)(nil)
@@ -287,7 +287,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsProvider, error) {
 			case "worker_count":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
-					return nil, plugin.DnsmeshMdns, c.ArgErr())
+					return nil, plugin.Error(QueryPluginName, c.ArgErr())
 				}
 				workerCount, err := strconv.Atoi(remaining[0])
 				if err != nil {

@@ -1,6 +1,10 @@
 
 package mdns
 
+import (
+	"time"
+)
+
 const (
 	DefaultServiceType = "_dns._udp"
 
@@ -11,7 +15,7 @@ const (
 	AdvertisingPrefix = "meshdns "
 	DefaultTTL uint32 = 120
 
-	DefaultTimeout = 30
+	DefaultTimeout time.Duration = time.Second * 30
 	DefaultAddrsPerHost = 1
 	DefaultAddrMode = IPv4Only
 )

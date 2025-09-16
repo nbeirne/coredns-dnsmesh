@@ -62,7 +62,7 @@ func (m *MdnsProvider) Start() error {
 
 func (m *MdnsProvider) CreateFanout() *fanout.Fanout {
 	f := &fanout.Fanout {
-		Timeout: m.Timeout * time.Second,
+		Timeout: m.Timeout,
 		ExcludeDomains: fanout.NewDomain(), // TODO - no excludes
 		Race: false,  // first to respond wins, even if !success
 		From: m.Zone,

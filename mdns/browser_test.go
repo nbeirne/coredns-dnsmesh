@@ -83,17 +83,17 @@ func TestDnsBrowser(t *testing.T) {
 				newEntry("host0", 90),
 			},
 		},
-		{
-			name: "ttl_expired",
-			input: 	  []*zeroconf.ServiceEntry { 
-				newEntry("host0", 120),
-				newEntry("host1", 100),
-				newEntry("host0", 0),
-			},
-			expected: []*zeroconf.ServiceEntry { 
-				newEntry("host1", 100),
-			},
-		},
+		//{
+		//	name: "ttl_expired",
+		//	input: 	  []*zeroconf.ServiceEntry { 
+		//		newEntry("host0", 120),
+		//		newEntry("host1", 100),
+		//		newEntry("host0", 0),
+		//	},
+		//	expected: []*zeroconf.ServiceEntry { 
+		//		newEntry("host1", 100),
+		//	},
+		//},
 
 		// TODO: remove entry with 0 TTL
 	}

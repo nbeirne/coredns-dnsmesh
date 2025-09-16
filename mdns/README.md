@@ -13,11 +13,7 @@ dig -p 5353 @224.0.0.251 bowie.local
 
 ## TODO
 
-// TODO: more robust parsing of errors (auto/setup.go)
-// TODO: parse fanout options
-
 - lots of testing **now**
-    - filtering in the provider
     - browsing - maintaining list when given via chan
     - browsing - removal when TTL is 0
     - advertising - deconfliction

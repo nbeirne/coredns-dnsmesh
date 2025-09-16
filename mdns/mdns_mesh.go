@@ -116,7 +116,7 @@ func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEnt
 	}
 
 	for idx, ip := range ips {
-		if idx >= m.addrsPerHost {
+		if m.addrsPerHost > 0 && idx >= m.addrsPerHost {
 			break
 		}
 

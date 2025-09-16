@@ -108,7 +108,7 @@ func TestQuerySetup(t *testing.T) {
 	meshdns, _ := parseQueryOptions(c)
 
 	_, subnet , _:= net.ParseCIDR("127.0.0.0/24")
-	expectedResult := MdnsProvider{
+	expectedResult := MdnsMeshPlugin{
 		browser: &(MdnsBrowser {
 			mdnsType: "sometype",
 			ifaceBindSubnet: subnet,

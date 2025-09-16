@@ -23,7 +23,7 @@ const (
 	IPv4Only 	   = 3
 )
 
-type MdnsProvider struct {
+type MdnsMeshPlugin struct {
 	// fanout
 	Timeout               time.Duration 	// overall timeout for a whole request
 	Zone                  string 			// only process requests to this domain
@@ -50,9 +50,9 @@ type MdnsProvider struct {
 var log = clog.NewWithPlugin("dnsmesh_mdns")
 
 // Name implements the Handler interface.
-func (m *MdnsProvider) Name() string { return QueryPluginName }
+func (m *MdnsMeshPlugin) Name() string { return QueryPluginName }
 
-func (m *MdnsProvider) Start() error {
+func (m *MdnsMeshPlugin) Start() error {
 	log.Infof("Starting meshdns...")
 
 	m.browser.Start()
@@ -60,7 +60,7 @@ func (m *MdnsProvider) Start() error {
 	return nil
 }
 
-func (m *MdnsProvider) CreateFanout() *fanout.Fanout {
+func (m *MdnsMeshPlugin) CreateFanout() *fanout.Fanout {
 	f := &fanout.Fanout {
 		Timeout: m.Timeout,
 		ExcludeDomains: fanout.NewDomain(), // TODO - no excludes
@@ -87,7 +87,7 @@ func (m *MdnsProvider) CreateFanout() *fanout.Fanout {
 	return f
 }
 
-func (m *MdnsProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (m *MdnsMeshPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	log.Infof("Received request for name: %v", r.Question[0].Name)
 
 	f := m.CreateFanout()
@@ -95,7 +95,7 @@ func (m *MdnsProvider) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dn
 }
 
 
-func (m *MdnsProvider) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
+func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
 	if m.filter != nil && !m.filter.MatchString(entry.Instance) {
 		log.Errorf("Ignoring entry '%s' because the instance name did not match the filter: '%s'",
 				entry.Instance, m.filter.String())

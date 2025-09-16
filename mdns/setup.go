@@ -170,8 +170,8 @@ func getServerPort(c *caddy.Controller) (int, error) {
 }
 
 
-func parseQueryOptions(c *caddy.Controller) (*MdnsProvider, error) {
-	m := MdnsProvider{}
+func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
+	m := MdnsMeshPlugin{}
 
 	mdnsType := DefaultServiceType
 	ifaceBindSubnet := (*net.IPNet)(nil)

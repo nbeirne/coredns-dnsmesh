@@ -26,7 +26,7 @@ func NewMdnsAdvertise(instanceName, service string, port int, ttl uint32) *MdnsA
 		service:  	   service,
 		domain:        DefaultDomain, // always use local. Technically this may be different, but resolvers dont generally respect other values.
 		port:          port,
-		ttl: 		   120,
+		ttl: 		   ttl,
 	}
 }
 
@@ -47,7 +47,7 @@ func (m *MdnsAdvertise) StartAdvertise() error {
 		m.StopAdvertise()
 	}
 
-	log.Infof("Start advertising... Instance: %s, Service: %s, Port: %d", m.instanceName, m.service, m.port)
+	log.Infof("Start advertising... Instance: %s\n    Service: %s\n    Port: %d\n    TTL: %d", m.instanceName, m.service, m.port, m.ttl)
 
 	var ifaces []net.Interface
 	if m.ifaceBindSubnet != nil {

@@ -11,11 +11,28 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
 
+type arrayFlags []string
+
+// String is an implementation of the flag.Value interface
+func (i *arrayFlags) String() string {
+    return fmt.Sprintf("%v", *i)
+}
+
+// Set is an implementation of the flag.Value interface
+func (i *arrayFlags) Set(value string) error {
+    *i = append(*i, value)
+    return nil
+}
+
+
 func main() {
 	clog.D.Set()
 
+	ifaceStrs := arrayFlags{}
+
 	service := flag.String("service", "", "The mDNS service to browse for (required)")
-	subnetCIDR := flag.String("subnet", "", "The subnet to scan in CIDR notation (optional)")
+	flag.Var(&ifaceStrs, "", "The interface to scan")
+
 	flag.Parse()
 
 	if *service == "" {
@@ -23,20 +40,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	var subnet *net.IPNet
-	if *subnetCIDR != "" {
-		var err error
-		_, subnet, err = net.ParseCIDR(*subnetCIDR)
+	ifaces := []net.Interface{}
+	for _, ifaceStr := range ifaceStrs {
+		iface, err := net.InterfaceByName(ifaceStr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing subnet '%s': %v\n", *subnetCIDR, err)
+			fmt.Fprintf(os.Stderr, "No interface found with name %s", iface)
 			os.Exit(1)
 		}
-		fmt.Printf("Browsing for mDNS service '%s' on subnet '%s'. Press Ctrl-C to exit.\n", *service, *subnetCIDR)
-	} else {
-		fmt.Printf("Browsing for mDNS service '%s' on all interfaces. Press Ctrl-C to exit.\n", *service)
+		ifaces = append(ifaces, *iface)
 	}
 
-	b := browser.NewMdnsBrowser("local.", *service, subnet)
+	b := browser.NewMdnsBrowser("local.", *service, &ifaces)
 	b.Start()
 
 	// Wait for a SIGINT (Ctrl-C)

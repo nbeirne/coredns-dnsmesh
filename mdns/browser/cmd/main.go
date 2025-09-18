@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	clog.D.Set()
+
 	service := flag.String("service", "", "The mDNS service to browse for (required)")
 	subnetCIDR := flag.String("subnet", "", "The subnet to scan in CIDR notation (optional)")
 	flag.Parse()
@@ -20,8 +22,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error: the --service flag is required.")
 		os.Exit(1)
 	}
-
-	clog.D.Set()
 
 	var subnet *net.IPNet
 	if *subnetCIDR != "" {

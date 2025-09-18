@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"sync"
 	"context"
 	"errors"
 	"sort"
@@ -14,7 +15,7 @@ import (
 
 
 func TestQueryServiceStartup(t *testing.T) {
-	b := ZeroconfBrowser{}
+	b := NewZeroconfBrowser(".local", "_type", nil)
 	testCases := []struct {
 		tcase         string
 		expectedError string
@@ -300,20 +301,23 @@ func (failResolver) Browse(context context.Context, service, domain string, entr
 type controllableFakeZeroconf struct {
 	entriesCh chan *zeroconf.ServiceEntry
 	browseCalls int
+	mutex sync.Mutex
 }
 
 func (zc *controllableFakeZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
 	// Pass the browseStarted channel to the resolver
-	return &controllableFakeResolver{entriesCh: zc.entriesCh, browseCalls: &zc.browseCalls}, nil
+	return &controllableFakeResolver{entriesCh: zc.entriesCh, parent: zc}, nil
 }
 
 type controllableFakeResolver struct {
 	entriesCh chan *zeroconf.ServiceEntry
-	browseCalls *int
+	parent *controllableFakeZeroconf
 }
 
 func (r *controllableFakeResolver) Browse(ctx context.Context, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
-	*r.browseCalls = *r.browseCalls + 1
+	r.parent.mutex.Lock()
+	r.parent.browseCalls++
+	r.parent.mutex.Unlock()
 
 	// This fake browse blocks and waits for the test to send entries or the context to be canceled.
 	for {

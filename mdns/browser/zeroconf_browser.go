@@ -28,10 +28,8 @@ type ZeroconfBrowser struct {
 	stopOnce         sync.Once
 	wg               sync.WaitGroup
 
-	mutex           *sync.RWMutex
 	cancelBrowse 	context.CancelFunc
-
-	services        *map[string]*trackedService
+	cache            *serviceCache
 }
 
 func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser ZeroconfBrowser) {
@@ -42,12 +40,7 @@ func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (b
 
 	browser.zeroConfImpl = ZeroconfImpl{}
 
-	services := make(map[string]*trackedService)
-	browser.services = &services
-
-	mutex := sync.RWMutex{}
-	browser.mutex = &mutex
-
+	browser.cache = newServiceCache()
 	return browser
 }
 
@@ -62,10 +55,7 @@ func (m *ZeroconfBrowser) Start() {
 func (m *ZeroconfBrowser) Stop() {
 	m.stopOnce.Do(func() {
 		log.Info("Stopping MdnsBrowser...")
-		m.mutex.RLock()
-		cancel := m.cancelBrowse
-		m.mutex.RUnlock()
-		if cancel != nil {
+		if cancel := m.cancelBrowse; cancel != nil {
 			cancel()
 		}
 
@@ -75,20 +65,7 @@ func (m *ZeroconfBrowser) Stop() {
 }
 
 func (m *ZeroconfBrowser) Services() []*zeroconf.ServiceEntry {
-	now := time.Now()
-
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	serviceEntries := make([]*zeroconf.ServiceEntry, 0, len(*m.services))
-
-	for _, s := range *m.services {
-		if now.After(s.expiry) {
-			continue
-		}
-		serviceEntries = append(serviceEntries, s.entry)
-	}
-	return serviceEntries
+	return m.cache.getServices()
 }
 
 func (m *ZeroconfBrowser) browseLoop() {
@@ -114,13 +91,13 @@ func (m *ZeroconfBrowser) browseLoop() {
 			}
 
 			localEntry := *entry
-			m.addEntry(&localEntry)
+			m.cache.addEntry(&localEntry)
 
 			log.Debug("Recalculate signal received, resetting timer.")
 			if !timer.Stop() {
-				<-timer.C // Drain the timer if it already fired.
+				// <-timer.C // Drain the timer if it already fired.
 			}
-			refreshInterval := m.calculateNextRefresh()
+			refreshInterval := m.cache.calculateNextRefresh()
 			log.Debugf("Next mDNS refresh scheduled in %v", refreshInterval)
 			timer.Reset(refreshInterval)
 		}
@@ -152,8 +129,8 @@ func (m *ZeroconfBrowser) browseLoop() {
 			m.runBrowseSession(sessionCtx, &sessionWg, fanInCh)
 
 			// After the session, remove expired services and reset the timer for the next session.
-			m.removeExpiredServices()
-			refreshInterval := m.calculateNextRefresh()
+			m.cache.removeExpiredServices()
+			refreshInterval := m.cache.calculateNextRefresh()
 			log.Debugf("Next mDNS refresh scheduled in %v", refreshInterval)
 			timer.Reset(refreshInterval)
 		}

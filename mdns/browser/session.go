@@ -25,40 +25,32 @@ func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interf
 	}
 }
 
-func (zs *ZeroconfSession) Run(ctx context.Context, sessionWg *sync.WaitGroup, fanInCh chan<- *zeroconf.ServiceEntry) {
-	sessionWg.Add(1)
-	// This manager goroutine waits for the browse and forwarder to complete,
-	// then signals the session is done via the WaitGroup.
+func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.ServiceEntry) {
+	log.Debug("start browse session....")
+	defer log.Debug("end browse session....")
+
+	var wg sync.WaitGroup
+	localEntriesCh := make(chan *zeroconf.ServiceEntry)
+
+	// We want to wait for the fanin go routine to finish before stopping the call to Run.
+	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
+	wg.Add(1) 
 	go func() {
-		log.Debug("start browse session....")
-		defer log.Debug("end browse session....")
-		defer sessionWg.Done()
-		var wg sync.WaitGroup
-		wg.Add(2) // One for browseMdns, one for the forwarder.
-		localEntriesCh := make(chan *zeroconf.ServiceEntry)
-
-		go func() {
-			log.Debug("start browse mdns....")
-			defer log.Debug("end browse mdns....")	
-			defer wg.Done()
-			zs.browseMdns(ctx, localEntriesCh)
-		}()
-
-		go func() {
-			log.Debug("start fan in ch....")
-			defer log.Debug("end fan in ch....")	
-			defer wg.Done()
-			for entry := range localEntriesCh {
-				log.Debugf("Received entry via chan: %v", entry)
-				fanInCh <- entry
-			}
-		}()
-
-		wg.Wait()
+		log.Debug("start fan in ch....")
+		defer log.Debug("end fan in ch....")
+		defer wg.Done()
+		for entry := range localEntriesCh {
+			log.Debugf("Received entry via chan: %v", entry)
+			fanInCh <- entry
+		}
 	}()
+
+	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
+	zs.browseMdns(ctx, localEntriesCh)
+	wg.Wait()
 }
 
-func (zs *ZeroconfSession) browseMdns(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) error {
+func (zs *ZeroconfSession) browseMdns(ctx context.Context, localEntriesCh chan<- *zeroconf.ServiceEntry) error {
 	log.Debugf("browseMdns... Starting.")
 	defer log.Debugf("browseMdns... Finished.")
 
@@ -69,10 +61,12 @@ func (zs *ZeroconfSession) browseMdns(ctx context.Context, entriesCh chan *zeroc
 	resolver, err := zs.zeroConfImpl.NewResolver(opts)
 	if err != nil {
 		log.Errorf("Failed to initialize %s resolver: %s", zs.mdnsType, err.Error())
+		close(localEntriesCh)
 		return err
 	}
 
-	err = resolver.Browse(ctx, zs.mdnsType, zs.domain, entriesCh)
+	// ASSUMPTION: resolver.Browse will close localEntriesCh when ctx is cancelled or times out.
+	err = resolver.Browse(ctx, zs.mdnsType, zs.domain, localEntriesCh)
 	if err != nil && ctx.Err() == nil { // Don't log error if it's just a context cancellation
 		log.Errorf("Failed to browse %s records: %s", zs.mdnsType, err.Error())
 		return err

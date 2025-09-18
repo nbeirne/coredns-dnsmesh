@@ -14,7 +14,7 @@ import (
 
 
 func TestQueryServiceStartup(t *testing.T) {
-	b := MdnsBrowser{}
+	b := ZeroconfBrowser{}
 	testCases := []struct {
 		tcase         string
 		expectedError string
@@ -43,7 +43,7 @@ func TestQueryServiceStartup(t *testing.T) {
 	}
 }
 
-func TestMdnsBrowserDoesAddService(t *testing.T) {
+func TestZeroconfBrowserDoesAddService(t *testing.T) {
 	clog.D.Set()
 	testCases := []struct {
 		name        string
@@ -126,7 +126,7 @@ func TestMdnsBrowserDoesAddService(t *testing.T) {
 			entriesCh: make(chan *zeroconf.ServiceEntry),
 		}
 	
-		browser := NewMdnsBrowser(".local", "_type", nil)
+		browser := NewZeroconfBrowser(".local", "_type", nil)
 		browser.zeroConfImpl = fakeZeroconf
 		browser.Start()
 

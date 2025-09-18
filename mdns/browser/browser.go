@@ -20,4 +20,3 @@ type MdnsBrowserInterface interface {
 	Stop()
 	Services() []*zeroconf.ServiceEntry
 }
-

@@ -17,16 +17,10 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-type trackedService struct {
-	entry       *zeroconf.ServiceEntry
-	originalTTL time.Duration
-	expiry      time.Time
-}
-
-type MdnsBrowser struct {
+type ZeroconfBrowser struct {
 	domain 			 string
 	mdnsType       	 string
-	interfaces       *[]net.Interface 
+	interfaces 		*[]net.Interface // subnet to search on
 
 	zeroConfImpl     ZeroconfInterface
 	
@@ -40,8 +34,8 @@ type MdnsBrowser struct {
 	services        *map[string]*trackedService
 }
 
-func NewMdnsBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser MdnsBrowser) {
-	browser = MdnsBrowser{}
+func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser ZeroconfBrowser) {
+	browser = ZeroconfBrowser{}
 	browser.mdnsType = mdnsType
 	browser.domain = domain
 	browser.interfaces = interfaces
@@ -57,7 +51,7 @@ func NewMdnsBrowser(domain, mdnsType string, interfaces *[]net.Interface) (brows
 	return browser
 }
 
-func (m *MdnsBrowser) Start() {
+func (m *ZeroconfBrowser) Start() {
 	log.Info("Starting mDNS browser...")
 	m.startOnce.Do(func() {
 		m.wg.Add(1)
@@ -65,7 +59,7 @@ func (m *MdnsBrowser) Start() {
 	})
 }
 
-func (m *MdnsBrowser) Stop() {
+func (m *ZeroconfBrowser) Stop() {
 	m.stopOnce.Do(func() {
 		log.Info("Stopping MdnsBrowser...")
 		m.mutex.RLock()
@@ -80,7 +74,7 @@ func (m *MdnsBrowser) Stop() {
 	})
 }
 
-func (m *MdnsBrowser) Services() []*zeroconf.ServiceEntry {
+func (m *ZeroconfBrowser) Services() []*zeroconf.ServiceEntry {
 	now := time.Now()
 
 	m.mutex.Lock()
@@ -97,7 +91,7 @@ func (m *MdnsBrowser) Services() []*zeroconf.ServiceEntry {
 	return serviceEntries
 }
 
-func (m *MdnsBrowser) browseLoop() {
+func (m *ZeroconfBrowser) browseLoop() {
 	log.Debug("Start browseLoop....")
 	defer log.Debug("Finish browseLoop....")
 
@@ -166,7 +160,7 @@ func (m *MdnsBrowser) browseLoop() {
 	}
 }
 
-func (m *MdnsBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.WaitGroup, fanInCh chan<- *zeroconf.ServiceEntry) {
+func (m *ZeroconfBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.WaitGroup, fanInCh chan<- *zeroconf.ServiceEntry) {
 	sessionWg.Add(1)
 	// This manager goroutine waits for the browse and forwarder to complete,
 	// then signals the session is done via the WaitGroup.
@@ -199,82 +193,7 @@ func (m *MdnsBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.Wait
 	}()
 }
 
-func (m *MdnsBrowser) calculateNextRefresh() time.Duration {
-	m.mutex.RLock()
-	defer m.mutex.RUnlock()
-	return m.calculateNextRefresh_nolock()
-}
-
-func (m *MdnsBrowser) calculateNextRefresh_nolock() time.Duration {
-	// Default refresh interval if no services are found.
-	const defaultRefresh = 60 * time.Second
-	// Minimum refresh to avoid busy-looping on expired entries.
-	const minRefresh = 2 * time.Second
-
-	if len(*m.services) == 0 {
-		return defaultRefresh
-	}
-
-	now := time.Now()
-	var nextRefresh time.Time
-
-	for _, s := range *m.services {
-		// Refresh when 80% of the TTL has passed (i.e., 20% remains).
-		// The refresh time is the service's expiry time minus 20% of its original TTL.
-		refreshTime := s.expiry.Add(-(s.originalTTL * 2 / 10))
-
-		log.Debugf("CALC REF %v %v %v", s.expiry, s.originalTTL, refreshTime)
-
-		// If the calculated refresh time is already in the past, we should refresh very soon.
-		if refreshTime.Before(now) {
-			return minRefresh
-		}
-
-		if nextRefresh.IsZero() || refreshTime.Before(nextRefresh) {
-			nextRefresh = refreshTime
-		}
-	}
-
-	return time.Until(nextRefresh)
-}
-
-func (m *MdnsBrowser) removeExpiredServices() {
-	log.Debugf("Removing expired services...")
-
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
-	now := time.Now()
-	for instance, s := range *m.services {
-		if now.After(s.expiry) {
-			log.Infof("TTL expired for service, removing: %s", instance)
-			delete(*m.services, instance)
-		}
-	}
-}
-
-// receive an entry and process it.
-func (m *MdnsBrowser)addEntry(entry *zeroconf.ServiceEntry) {
-	trackedService := trackedService{
-		entry:       entry,
-		originalTTL: time.Duration(entry.TTL) * time.Second,
-		expiry:      time.Now().Add(time.Duration(entry.TTL) * time.Second),
-	}
-
-	m.mutex.Lock()
-	if entry.TTL == 0 {
-		log.Infof("Service expired: %s", entry.Instance)
-		delete(*m.services, entry.Instance)
-	} else {
-		log.Infof("Service Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d\n", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
-		(*m.services)[entry.Instance] = &trackedService
-	}
-	m.mutex.Unlock()
-
-}
-
-
-func (m *MdnsBrowser) browseMdns(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) error {
+func (m *ZeroconfBrowser) browseMdns(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) error {
 	log.Debugf("browseMdns... Starting.")
 	defer log.Debugf("browseMdns... Finished.")
 
@@ -295,19 +214,4 @@ func (m *MdnsBrowser) browseMdns(ctx context.Context, entriesCh chan *zeroconf.S
 	}
 
 	return nil
-}
-
-// allow for mocking in tests
-type ZeroconfInterface interface {
-	NewResolver(...zeroconf.ClientOption) (ResolverInterface, error)
-}
-
-type ZeroconfImpl struct{}
-
-func (z ZeroconfImpl) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
-	return zeroconf.NewResolver(opts...)
-}
-
-type ResolverInterface interface {
-	Browse(context.Context, string, string, chan<- *zeroconf.ServiceEntry) error
 }

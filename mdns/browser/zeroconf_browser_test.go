@@ -84,40 +84,40 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 				newEntry("host0", 90),
 			},
 		},
-		// {
-		// 	name: "ttl_expired_explicit",
-		// 	input: 	  []*zeroconf.ServiceEntry {
-		// 		newEntry("host0", 120),
-		// 		newEntry("host1", 100),
-		// 		newEntry("host0", 0),
-		// 	},
-		// 	expected: []*zeroconf.ServiceEntry {
-		// 		newEntry("host1", 100),
-		// 	},
-		// },
+		 {
+		 	name: "ttl_expired_explicit",
+		 	input: 	  []*zeroconf.ServiceEntry {
+		 		newEntry("host0", 120),
+		 		newEntry("host1", 100),
+		 		newEntry("host0", 0),
+		 	},
+		 	expected: []*zeroconf.ServiceEntry {
+		 		newEntry("host1", 100),
+		 	},
+		 },
 
-		// {
-		// 	name: "ttl_at_0_does_remove",
-		// 	input: 	  []*zeroconf.ServiceEntry {
-		// 		newEntry("host0", 1), // refresh expected at 0.6s
-		// 	},
-		// 	sleepBeforeExpectation: 2 * time.Second,
-		// 	expected: []*zeroconf.ServiceEntry {
-		// 	},
-		// 	expectedBrowseCalls: 2,
-		// },
+		 {
+		 	name: "ttl_at_0_does_remove",
+		 	input: 	  []*zeroconf.ServiceEntry {
+		 		newEntry("host0", 1), // refresh expected at 0.6s
+		 	},
+		 	sleepBeforeExpectation: 2 * time.Second,
+		 	expected: []*zeroconf.ServiceEntry {
+		 	},
+		 	expectedBrowseCalls: 2,
+		 },
 
-		// {
-		// 	name: "ttl_at_20pct_does_refresh",
-		// 	input: 	  []*zeroconf.ServiceEntry {
-		// 		newEntry("host0", 6), // refresh expected at 0.6s
-		// 	},
-		// 	sleepBeforeExpectation: 5 * time.Second, // 80% of 6 is 4.8
-		// 	expected: []*zeroconf.ServiceEntry {
-		// 		newEntry("host0", 6), // should still be present
-		// 	},
-		// 	expectedBrowseCalls: 2,
-		// },
+		 {
+		 	name: "ttl_at_20pct_does_refresh",
+		 	input: 	  []*zeroconf.ServiceEntry {
+		 		newEntry("host0", 6), // refresh expected at 0.6s
+		 	},
+		 	sleepBeforeExpectation: 5 * time.Second, // 80% of 6 is 4.8
+		 	expected: []*zeroconf.ServiceEntry {
+		 		newEntry("host0", 6), // should still be present
+		 	},
+		 	expectedBrowseCalls: 2,
+		 },
 
 	}
 

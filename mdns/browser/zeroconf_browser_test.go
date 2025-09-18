@@ -29,7 +29,7 @@ func TestQueryServiceStartup(t *testing.T) {
 		b.zeroConfImpl = tc.zeroconfImpl
 		entriesCh := make(chan *zeroconf.ServiceEntry)
 		ctx, cancel := context.WithCancel(context.Background())
-		result := b.browseMdns(ctx, entriesCh)
+		result := b.browseMdns(ctx, entriesCh) // This method is now in session.go
 		cancel()
 		<- ctx.Done()
 		if tc.expectedError == "" {

@@ -2,12 +2,30 @@ package browser
 
 import (
 	"context"
+	"net"
 	"sync"
 
 	"github.com/grandcat/zeroconf"
 )
 
-func (m *ZeroconfBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.WaitGroup, fanInCh chan<- *zeroconf.ServiceEntry) {
+type ZeroconfSession struct {
+	zeroConfImpl ZeroconfInterface
+	interfaces   *[]net.Interface
+	mdnsType     string
+	domain       string
+}
+
+// NewZeroconfSession creates a new ZeroconfSession object.
+func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interface, mdnsType, domain string) *ZeroconfSession {
+	return &ZeroconfSession{
+		zeroConfImpl: zeroConfImpl,
+		interfaces:   interfaces,
+		mdnsType:     mdnsType,
+		domain:       domain,
+	}
+}
+
+func (zs *ZeroconfSession) Run(ctx context.Context, sessionWg *sync.WaitGroup, fanInCh chan<- *zeroconf.ServiceEntry) {
 	sessionWg.Add(1)
 	// This manager goroutine waits for the browse and forwarder to complete,
 	// then signals the session is done via the WaitGroup.
@@ -23,7 +41,7 @@ func (m *ZeroconfBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.
 			log.Debug("start browse mdns....")
 			defer log.Debug("end browse mdns....")	
 			defer wg.Done()
-			m.browseMdns(ctx, localEntriesCh)
+			zs.browseMdns(ctx, localEntriesCh)
 		}()
 
 		go func() {
@@ -40,23 +58,23 @@ func (m *ZeroconfBrowser) runBrowseSession(ctx context.Context, sessionWg *sync.
 	}()
 }
 
-func (m *ZeroconfBrowser) browseMdns(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) error {
+func (zs *ZeroconfSession) browseMdns(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) error {
 	log.Debugf("browseMdns... Starting.")
 	defer log.Debugf("browseMdns... Finished.")
 
 	var opts zeroconf.ClientOption
-	if m.interfaces != nil {
-		opts = zeroconf.SelectIfaces(*m.interfaces)
+	if zs.interfaces != nil {
+		opts = zeroconf.SelectIfaces(*zs.interfaces)
 	}
-	resolver, err := m.zeroConfImpl.NewResolver(opts)
+	resolver, err := zs.zeroConfImpl.NewResolver(opts)
 	if err != nil {
-		log.Errorf("Failed to initialize %s resolver: %s", m.mdnsType, err.Error())
+		log.Errorf("Failed to initialize %s resolver: %s", zs.mdnsType, err.Error())
 		return err
 	}
 
-	err = resolver.Browse(ctx, m.mdnsType, m.domain, entriesCh)
-	if err != nil {
-		log.Errorf("Failed to browse %s records: %s", m.mdnsType, err.Error())
+	err = resolver.Browse(ctx, zs.mdnsType, zs.domain, entriesCh)
+	if err != nil && ctx.Err() == nil { // Don't log error if it's just a context cancellation
+		log.Errorf("Failed to browse %s records: %s", zs.mdnsType, err.Error())
 		return err
 	}
 

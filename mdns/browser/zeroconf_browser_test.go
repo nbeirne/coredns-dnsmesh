@@ -26,10 +26,10 @@ func TestQueryServiceStartup(t *testing.T) {
 		{"Browse fails", "test browse error", browseFailZeroconf{}},
 	}
 	for _, tc := range testCases {
-		b.zeroConfImpl = tc.zeroconfImpl
+		session := NewZeroconfSession(tc.zeroconfImpl, b.interfaces, b.mdnsType, b.domain)
 		entriesCh := make(chan *zeroconf.ServiceEntry)
 		ctx, cancel := context.WithCancel(context.Background())
-		result := b.browseMdns(ctx, entriesCh) // This method is now in session.go
+		result := session.browseMdns(ctx, entriesCh)
 		cancel()
 		<- ctx.Done()
 		if tc.expectedError == "" {

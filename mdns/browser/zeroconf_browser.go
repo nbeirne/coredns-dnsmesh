@@ -126,7 +126,7 @@ func (m *ZeroconfBrowser) browseLoop() {
 			// Start a new non-blocking browse session.
 			var sessionCtx context.Context
 			sessionCtx, cancelCurrentSession = context.WithCancel(outerCtx)
-			m.runBrowseSession(sessionCtx, &sessionWg, fanInCh)
+			NewZeroconfSession(m.zeroConfImpl, m.interfaces, m.mdnsType, m.domain).Run(sessionCtx, &sessionWg, fanInCh)
 
 			// After the session, remove expired services and reset the timer for the next session.
 			m.cache.removeExpiredServices()
@@ -136,4 +136,3 @@ func (m *ZeroconfBrowser) browseLoop() {
 		}
 	}
 }
-

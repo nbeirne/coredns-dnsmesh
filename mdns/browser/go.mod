@@ -1,4 +1,4 @@
-module browser
+module github.com/nbeirne/coredns-dnsmesh/mdns/browser
 
 go 1.25.1
 

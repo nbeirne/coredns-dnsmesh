@@ -25,7 +25,7 @@ func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interf
 	}
 }
 
-func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.ServiceEntry) {
+func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.ServiceEntry) error {
 	log.Debug("start browse session....")
 	defer log.Debug("end browse session....")
 
@@ -46,8 +46,9 @@ func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.Ser
 	}()
 
 	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
-	zs.browseMdns(ctx, localEntriesCh)
+	err := zs.browseMdns(ctx, localEntriesCh)
 	wg.Wait()
+	return err
 }
 
 func (zs *ZeroconfSession) browseMdns(ctx context.Context, localEntriesCh chan<- *zeroconf.ServiceEntry) error {

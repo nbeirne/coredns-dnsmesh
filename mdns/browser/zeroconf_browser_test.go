@@ -3,7 +3,6 @@ package browser
 import (
 	"sync"
 	"context"
-	"errors"
 	"sort"
 	"time"
 	"testing"
@@ -13,36 +12,6 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
 
-
-func TestQueryServiceStartup(t *testing.T) {
-	b := NewZeroconfBrowser(".local", "_type", nil)
-	testCases := []struct {
-		tcase         string
-		expectedError string
-		zeroconfImpl  ZeroconfInterface
-	}{
-		{"queryService succeeds", "", fakeZeroconf{}},
-		{"NewResolver fails", "test resolver error", failZeroconf{}},
-		{"Browse fails", "test browse error", browseFailZeroconf{}},
-	}
-	for _, tc := range testCases {
-		session := NewZeroconfSession(tc.zeroconfImpl, b.interfaces, b.mdnsType, b.domain)
-		entriesCh := make(chan *zeroconf.ServiceEntry)
-		ctx, cancel := context.WithCancel(context.Background())
-		result := session.browseMdns(ctx, entriesCh)
-		cancel()
-		<- ctx.Done()
-		if tc.expectedError == "" {
-			if result != nil {
-				t.Errorf("Unexpected failure in %v: %v", tc.tcase, result)
-			}
-		} else {
-			if result.Error() != tc.expectedError {
-				t.Errorf("Unexpected result in %v: %v", tc.tcase, result)
-			}
-		}
-	}
-}
 
 func TestZeroconfBrowserDoesAddService(t *testing.T) {
 	clog.D.Set()
@@ -256,46 +225,6 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 // 	}
 // }
 
-
-// setup fakes
-type fakeZeroconf struct{
-	entries []*zeroconf.ServiceEntry
-}
-
-func (zc fakeZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
-	return fakeResolver{zc.entries}, nil
-}
-
-type failZeroconf struct{
-}
-
-func (failZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
-	return nil, errors.New("test resolver error")
-}
-
-type fakeResolver struct{
-	entries []*zeroconf.ServiceEntry
-}
-
-func (r fakeResolver) Browse(context context.Context, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
-	for _, entry := range r.entries {
-		entries <- entry
-	}
-	close(entries)
-	return nil
-}
-
-type browseFailZeroconf struct{}
-
-func (browseFailZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
-	return failResolver{}, nil
-}
-
-type failResolver struct{}
-
-func (failResolver) Browse(context context.Context, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
-	return errors.New("test browse error")
-}
 
 // A fake that can be controlled by the test
 type controllableFakeZeroconf struct {

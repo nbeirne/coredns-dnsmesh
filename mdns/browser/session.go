@@ -8,7 +8,6 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-
 type ZeroconfSession struct {
 	zeroConfImpl ZeroconfInterface
 	interfaces   *[]net.Interface
@@ -35,7 +34,7 @@ func (zs *ZeroconfSession) Run(ctx context.Context, entriesCh chan<- *zeroconf.S
 
 	// We want to wait for the go routine to finish before stopping the call to Run.
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
-	wg.Add(1) 
+	wg.Add(1)
 	go func() {
 		log.Debug("start fan in ch....")
 		defer log.Debug("end fan in ch....")
@@ -56,11 +55,7 @@ func (zs *ZeroconfSession) browseMdns(ctx context.Context, localEntriesCh chan<-
 	log.Debugf("browseMdns... Starting.")
 	defer log.Debugf("browseMdns... Finished.")
 
-	var opts zeroconf.ClientOption
-	if zs.interfaces != nil {
-		opts = zeroconf.SelectIfaces(*zs.interfaces)
-	}
-	resolver, err := zs.zeroConfImpl.NewResolver(opts)
+	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
 	if err != nil {
 		log.Errorf("Failed to initialize %s resolver: %s", zs.mdnsType, err.Error())
 		close(localEntriesCh)
@@ -75,4 +70,12 @@ func (zs *ZeroconfSession) browseMdns(ctx context.Context, localEntriesCh chan<-
 	}
 
 	return nil
+}
+
+func (zs *ZeroconfSession) getClientOption() zeroconf.ClientOption {
+	var opts zeroconf.ClientOption
+	if zs.interfaces != nil {
+		opts = zeroconf.SelectIfaces(*zs.interfaces)
+	}
+	return opts
 }

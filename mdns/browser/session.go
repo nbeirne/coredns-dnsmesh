@@ -23,9 +23,6 @@ func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interf
 }
 
 func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain string, entriesCh chan<- *zeroconf.ServiceEntry) error {
-	log.Debug("start browse session....")
-	defer log.Debug("end browse session....")
-
 	var wg sync.WaitGroup
 	localEntriesCh := make(chan *zeroconf.ServiceEntry)
 
@@ -33,11 +30,8 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
 	wg.Add(1)
 	go func() {
-		log.Debug("start browse receiver....")
-		defer log.Debug("end browse receiver....")
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			log.Debugf("Received entry via Browse: %v", entry)
 			entriesCh <- entry
 		}
 	}()
@@ -45,7 +39,6 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
 	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
 	if err != nil {
-		log.Errorf("Failed to initialize %s resolver: %s", service, err.Error())
 		close(localEntriesCh)
 		return err
 	}
@@ -53,7 +46,6 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 	// ASSUMPTION: resolver.Browse will close localEntriesCh when ctx is cancelled or times out.
 	err = resolver.Browse(ctx, service, domain, localEntriesCh)
 	if err != nil && ctx.Err() == nil { // Don't log error if it's just a context cancellation
-		log.Errorf("Failed to browse %s records: %s", service, err.Error())
 		return err
 	}
 
@@ -62,9 +54,6 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 }
 
 func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service string, domain string, entriesCh chan<- *zeroconf.ServiceEntry) error {
-	log.Debug("start lookuo session....")
-	defer log.Debug("end lookup session....")
-
 	var wg sync.WaitGroup
 	localEntriesCh := make(chan *zeroconf.ServiceEntry)
 
@@ -72,11 +61,8 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
 	wg.Add(1)
 	go func() {
-		log.Debug("start lookup receiver....")
-		defer log.Debug("end lookup receiver...")
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			log.Debugf("Received entry via Lookup: %v", entry)
 			entriesCh <- entry
 		}
 	}()
@@ -84,7 +70,6 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
 	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
 	if err != nil {
-		log.Errorf("Failed to initialize %s resolver: %s", service, err.Error())
 		close(localEntriesCh)
 		return err
 	}
@@ -92,7 +77,6 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 	// ASSUMPTION: resolver.Browse will close localEntriesCh when ctx is cancelled or times out.
 	err = resolver.Lookup(ctx, instance, service, domain, localEntriesCh)
 	if err != nil && ctx.Err() == nil { // Don't log error if it's just a context cancellation
-		log.Errorf("Failed to browse %s records: %s", service, err.Error())
 		return err
 	}
 

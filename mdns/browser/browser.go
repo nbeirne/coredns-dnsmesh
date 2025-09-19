@@ -10,10 +10,7 @@ package browser
 
 import (
 	"github.com/grandcat/zeroconf"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
-
-var log = clog.NewWithPlugin("mdns_browser")
 
 type MdnsBrowserInterface interface {
 	Start() error

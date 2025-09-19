@@ -17,6 +17,10 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
+
+// Main browsing interface for zeroconf.
+// This service will manage zeroconf browsing sessions and it will provide
+// a list of services through a cache object.
 type ZeroconfBrowser struct {
 	domain 			 string
 	mdnsType       	 string

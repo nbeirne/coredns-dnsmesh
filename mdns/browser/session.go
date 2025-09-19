@@ -8,6 +8,7 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
+
 type ZeroconfSession struct {
 	zeroConfImpl ZeroconfInterface
 	interfaces   *[]net.Interface
@@ -25,14 +26,14 @@ func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interf
 	}
 }
 
-func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.ServiceEntry) error {
+func (zs *ZeroconfSession) Run(ctx context.Context, entriesCh chan<- *zeroconf.ServiceEntry) error {
 	log.Debug("start browse session....")
 	defer log.Debug("end browse session....")
 
 	var wg sync.WaitGroup
 	localEntriesCh := make(chan *zeroconf.ServiceEntry)
 
-	// We want to wait for the fanin go routine to finish before stopping the call to Run.
+	// We want to wait for the go routine to finish before stopping the call to Run.
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
 	wg.Add(1) 
 	go func() {
@@ -41,7 +42,7 @@ func (zs *ZeroconfSession) Run(ctx context.Context, fanInCh chan<- *zeroconf.Ser
 		defer wg.Done()
 		for entry := range localEntriesCh {
 			log.Debugf("Received entry via chan: %v", entry)
-			fanInCh <- entry
+			entriesCh <- entry
 		}
 	}()
 

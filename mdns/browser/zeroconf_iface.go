@@ -20,6 +20,7 @@ func (z ZeroconfImpl) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterf
 }
 
 type ResolverInterface interface {
-	Browse(context.Context, string, string, chan<- *zeroconf.ServiceEntry) error
+	Browse(ctx context.Context, service string, domain string, entries chan<- *zeroconf.ServiceEntry) error
+	Lookup(ctx context.Context, instance string, service string, domain string, entries chan<- *zeroconf.ServiceEntry) error
 }
 

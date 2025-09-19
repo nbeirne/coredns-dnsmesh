@@ -17,23 +17,22 @@ import (
 	"github.com/grandcat/zeroconf"
 )
 
-
 // Main browsing interface for zeroconf.
 // This service will manage zeroconf browsing sessions and it will provide
 // a list of services through a cache object.
 type ZeroconfBrowser struct {
-	domain 			 string
-	mdnsType       	 string
-	interfaces 		*[]net.Interface // subnet to search on
+	domain     string
+	mdnsType   string
+	interfaces *[]net.Interface // subnet to search on
 
-	zeroConfImpl     ZeroconfInterface
-	
-	startOnce        sync.Once
-	stopOnce         sync.Once
-	wg               sync.WaitGroup
+	zeroConfImpl ZeroconfInterface
 
-	cancelBrowse 	context.CancelFunc
-	cache            *serviceCache
+	startOnce sync.Once
+	stopOnce  sync.Once
+	wg        sync.WaitGroup
+
+	cancelBrowse context.CancelFunc
+	cache        *serviceCache
 }
 
 func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser ZeroconfBrowser) {
@@ -82,7 +81,7 @@ func (m *ZeroconfBrowser) browseLoop() {
 	timer := time.NewTimer(0) // Fire immediately for the first browse
 	var sessionWg sync.WaitGroup
 	var cancelCurrentSession context.CancelFunc
-	
+
 	fanInCh := make(chan *zeroconf.ServiceEntry, 10)
 
 	// This goroutine handles processing entries and shutting down.
@@ -110,7 +109,7 @@ func (m *ZeroconfBrowser) browseLoop() {
 
 	for {
 		select {
-			
+
 		case <-outerCtx.Done():
 			if cancelCurrentSession != nil {
 				cancelCurrentSession()
@@ -131,7 +130,7 @@ func (m *ZeroconfBrowser) browseLoop() {
 			var sessionCtx context.Context
 			sessionCtx, cancelCurrentSession = context.WithCancel(outerCtx)
 			session := NewZeroconfSession(m.zeroConfImpl, m.interfaces, m.mdnsType, m.domain)
-			
+
 			sessionWg.Add(1)
 			go func() {
 				defer sessionWg.Done()

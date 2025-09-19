@@ -103,7 +103,7 @@ func TestSessionStartup(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		result := session.Run(ctx, entriesCh)
 		cancel()
-		<- ctx.Done()
+		<-ctx.Done()
 		if tc.expectedError == "" {
 			if result != nil {
 				t.Errorf("Unexpected failure in %v: %v", tc.tcase, result)
@@ -115,8 +115,6 @@ func TestSessionStartup(t *testing.T) {
 		}
 	}
 }
-
-
 
 // mockResolver implements the zeroconf.Resolver interface for testing.
 type mockResolver struct {
@@ -140,8 +138,8 @@ func (m *mockResolver) Browse(ctx context.Context, service, domain string, entri
 	return ctx.Err()
 }
 
-func (m *mockResolver) Lookup(ctx context.Context, instance, service, domain string) (*zeroconf.ServiceEntry, error) {
-	return nil, nil // Not needed for this test
+func (m *mockResolver) Lookup(ctx context.Context, instance, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
+	return nil // Not needed for this test
 }
 
 func (m *mockResolver) Shutdown() {
@@ -150,7 +148,7 @@ func (m *mockResolver) Shutdown() {
 
 // mockZeroconf implements ZeroconfInterface for testing.
 type mockZeroconf struct {
-	resolver          *mockResolver
+	resolver               *mockResolver
 	newResolverShouldError bool
 }
 

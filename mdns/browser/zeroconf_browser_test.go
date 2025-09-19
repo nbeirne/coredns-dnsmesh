@@ -1,107 +1,94 @@
 package browser
 
 import (
-	"sync"
 	"context"
 	"sort"
-	"time"
+	"sync"
 	"testing"
+	"time"
+
 	// "github.com/stretchr/testify/require"
 
-	"github.com/grandcat/zeroconf"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/grandcat/zeroconf"
 )
-
 
 func TestZeroconfBrowserDoesAddService(t *testing.T) {
 	clog.D.Set()
 	testCases := []struct {
-		name        string
-		input    []*zeroconf.ServiceEntry
+		name                   string
+		input                  []*zeroconf.ServiceEntry
 		sleepBeforeExpectation time.Duration
-		expected []*zeroconf.ServiceEntry
-		expectedBrowseCalls int
+		expected               []*zeroconf.ServiceEntry
+		expectedBrowseCalls    int
 	}{
 		{
 			name: "basic",
-			input: 	  []*zeroconf.ServiceEntry { 
+			input: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 			},
-			expected: []*zeroconf.ServiceEntry { 
+			expected: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 			},
 		},
 		{
 			name: "two_hosts",
-			input: 	  []*zeroconf.ServiceEntry { 
+			input: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 				newEntry("host1", 100),
 			},
-			expected: []*zeroconf.ServiceEntry { 
+			expected: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 				newEntry("host1", 100),
 			},
 		},
 		{
 			name: "updated_host",
-			input: 	  []*zeroconf.ServiceEntry { 
+			input: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 				newEntry("host0", 100),
 				newEntry("host0", 90),
 			},
-			expected: []*zeroconf.ServiceEntry { 
+			expected: []*zeroconf.ServiceEntry{
 				newEntry("host0", 90),
 			},
 		},
-		 {
-		 	name: "ttl_expired_explicit",
-		 	input: 	  []*zeroconf.ServiceEntry {
-		 		newEntry("host0", 120),
-		 		newEntry("host1", 100),
-		 		newEntry("host0", 0),
-		 	},
-		 	expected: []*zeroconf.ServiceEntry {
-		 		newEntry("host1", 100),
-		 	},
-		 },
+		{
+			name: "ttl_expired_explicit",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 120),
+				newEntry("host1", 100),
+				newEntry("host0", 0),
+			},
+			expected: []*zeroconf.ServiceEntry{
+				newEntry("host1", 100),
+			},
+		},
 
-		 {
-		 	name: "ttl_at_0_does_remove",
-		 	input: 	  []*zeroconf.ServiceEntry {
-		 		newEntry("host0", 1), // refresh expected at 0.6s
-		 	},
-		 	sleepBeforeExpectation: 2 * time.Second,
-		 	expected: []*zeroconf.ServiceEntry {
-		 	},
-		 	expectedBrowseCalls: 2,
-		 },
-
-		 {
-		 	name: "ttl_at_20pct_does_refresh",
-		 	input: 	  []*zeroconf.ServiceEntry {
-		 		newEntry("host0", 6), // refresh expected at 0.6s
-		 	},
-		 	sleepBeforeExpectation: 5 * time.Second, // 80% of 6 is 4.8
-		 	expected: []*zeroconf.ServiceEntry {
-		 		newEntry("host0", 6), // should still be present
-		 	},
-		 	expectedBrowseCalls: 2,
-		 },
-
+		{
+			name: "ttl_at_0_does_remove",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 1), // refresh expected at 0.6s
+			},
+			sleepBeforeExpectation: 2 * time.Second,
+			expected:               []*zeroconf.ServiceEntry{},
+			expectedBrowseCalls:    2,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Logf("\nStarting test: %s\n", tc.name)
 		fakeZeroconf := &controllableFakeZeroconf{
-			entriesCh: make(chan *zeroconf.ServiceEntry),
+			browseEntriesCh: make(chan *zeroconf.ServiceEntry),
+			lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
 		}
-	
+
 		browser := NewZeroconfBrowser(".local", "_type", nil)
 		browser.zeroConfImpl = fakeZeroconf
 		browser.Start()
 
 		for _, entry := range tc.input {
-			fakeZeroconf.entriesCh <- entry
+			fakeZeroconf.browseEntriesCh <- entry
 		}
 
 		if tc.sleepBeforeExpectation > 0 {
@@ -114,13 +101,13 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 		sort.Sort(ByInstance(resultServices))
 		sort.Sort(ByInstance(tc.expected))
 
+		if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
+			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
+		}
+
 		if len(resultServices) != len(tc.expected) {
 			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
 			continue
-		}
-	
-		if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
-			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
 		}
 
 		for idx := range resultServices {
@@ -130,8 +117,89 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 			if resultServices[idx].TTL != tc.expected[idx].TTL {
 				t.Errorf("Unexpected result in test %s, ttl at %d is different expected (%d != %d)", tc.name, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
 			}
-		}	
+		}
 	}
+}
+
+func TestTTL(t *testing.T) {
+	clog.D.Set()
+	testCases := []struct {
+		name                   string
+		input                  []*zeroconf.ServiceEntry
+		sleepBeforeExpectation time.Duration
+		expected               []*zeroconf.ServiceEntry
+		expectedBrowseCalls    int
+	}{
+		{
+			name: "ttl_at_20pct_does_refresh",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // refresh expected at 4.8s
+			},
+			sleepBeforeExpectation: 5 * time.Second, // 80% of 6 is 4.8
+			expected: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // should still be present
+			},
+			expectedBrowseCalls: 2,
+		},
+
+		{
+			name: "ttl_expiring_does_not_spam",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 10), // refresh expected at 8s
+				newEntry("host1", 6),  // refresh expected at 8s
+			},
+			sleepBeforeExpectation: 20 * time.Second, // 80% of 6 is 4.8
+			expected: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // should still be present
+			},
+			expectedBrowseCalls: 2,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Logf("\nStarting test: %s\n", tc.name)
+		fakeZeroconf := controllableFakeZeroconf{
+			browseEntriesCh: make(chan *zeroconf.ServiceEntry),
+			lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
+		}
+
+		browser := NewZeroconfBrowser(".local", "_type", nil)
+		browser.zeroConfImpl = &fakeZeroconf
+		browser.Start()
+
+		for _, entry := range tc.input {
+			fakeZeroconf.browseEntriesCh <- entry
+		}
+
+		if tc.sleepBeforeExpectation > 0 {
+			time.Sleep(tc.sleepBeforeExpectation)
+		}
+
+		browser.Stop()
+
+		resultServices := browser.Services()
+		sort.Sort(ByInstance(resultServices))
+		sort.Sort(ByInstance(tc.expected))
+
+		if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
+			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
+		}
+
+		if len(resultServices) != len(tc.expected) {
+			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
+			continue
+		}
+
+		for idx := range resultServices {
+			if resultServices[idx].HostName != tc.expected[idx].HostName {
+				t.Errorf("Unexpected result in test %s, hostname at %d is different expected (%s != %s)", tc.name, idx, resultServices[idx].HostName, tc.expected[idx].HostName)
+			}
+			if resultServices[idx].TTL != tc.expected[idx].TTL {
+				t.Errorf("Unexpected result in test %s, ttl at %d is different expected (%d != %d)", tc.name, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
+			}
+		}
+	}
+
 }
 
 // func _TestMdnsBrowser_Lifecycle(t *testing.T) {
@@ -225,21 +293,23 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 // 	}
 // }
 
-
 // A fake that can be controlled by the test
 type controllableFakeZeroconf struct {
-	entriesCh chan *zeroconf.ServiceEntry
+	browseEntriesCh chan *zeroconf.ServiceEntry
+	lookupEntriesCh chan *zeroconf.ServiceEntry
+
 	browseCalls int
+	lookupCalls map[string]int
+
 	mutex sync.Mutex
 }
 
 func (zc *controllableFakeZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
 	// Pass the browseStarted channel to the resolver
-	return &controllableFakeResolver{entriesCh: zc.entriesCh, parent: zc}, nil
+	return &controllableFakeResolver{parent: zc}, nil
 }
 
 type controllableFakeResolver struct {
-	entriesCh chan *zeroconf.ServiceEntry
 	parent *controllableFakeZeroconf
 }
 
@@ -254,21 +324,41 @@ func (r *controllableFakeResolver) Browse(ctx context.Context, service, domain s
 		case <-ctx.Done():
 			close(entries)
 			return nil
-		case entry := <-r.entriesCh:
+		case entry := <-r.parent.browseEntriesCh:
 			entries <- entry
 		}
 	}
 }
 
+func (r *controllableFakeResolver) Lookup(ctx context.Context, instance, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
+	r.parent.mutex.Lock()
+	r.parent.lookupCalls[instance]++
+	r.parent.mutex.Unlock()
+
+	// This fake lookup blocks and waits for the test to send entries or the context to be canceled.
+	for {
+		select {
+		case <-ctx.Done():
+			close(entries)
+			return nil
+		case entry := <-r.parent.lookupEntriesCh:
+			entries <- entry
+		}
+	}
+
+	return nil
+}
+
 // sorting
 
 type ByInstance []*zeroconf.ServiceEntry
+
 func (a ByInstance) Len() int           { return len(a) }
 func (a ByInstance) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByInstance) Less(i, j int) bool { return a[i].Instance < a[j].Instance }
 
 func newEntry(instanceName string, ttl uint32) (entry *zeroconf.ServiceEntry) {
-	e := zeroconf.ServiceEntry { ServiceRecord: zeroconf.ServiceRecord { Instance: instanceName }, TTL: ttl }
+	e := zeroconf.ServiceEntry{ServiceRecord: zeroconf.ServiceRecord{Instance: instanceName}, TTL: ttl}
 	entry = &e
 	return entry
 }

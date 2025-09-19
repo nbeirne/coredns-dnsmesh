@@ -58,21 +58,45 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 			input: []*zeroconf.ServiceEntry{
 				newEntry("host0", 120),
 				newEntry("host1", 100),
+				newEntry("host2", 40),
 				newEntry("host0", 0),
 			},
 			expected: []*zeroconf.ServiceEntry{
 				newEntry("host1", 100),
+				newEntry("host2", 40),
 			},
 		},
-
 		{
-			name: "ttl_at_0_does_remove",
+			name: "many_hosts_added_removed",
 			input: []*zeroconf.ServiceEntry{
-				newEntry("host0", 1), // refresh expected at 0.6s
+				newEntry("host0", 120),
+				newEntry("host1", 100),
+				newEntry("host2", 100),
+				newEntry("host3", 100),
+				newEntry("host4", 100),
+				newEntry("host5", 100),
+				newEntry("host6", 100),
+				newEntry("host0", 120),
+				newEntry("host1", 100),
+				newEntry("host2", 100),
+				newEntry("host3", 100),
+				newEntry("host4", 100),
+				newEntry("host5", 100),
+				newEntry("host6", 100),
+				newEntry("host0", 120),
+				newEntry("host1", 120),
+				newEntry("host2", 0),
+				newEntry("host3", 0),
+				newEntry("host4", 0),
+				newEntry("host5", 100),
+				newEntry("host6", 100),
 			},
-			sleepBeforeExpectation: 2 * time.Second,
-			expected:               []*zeroconf.ServiceEntry{},
-			expectedBrowseCalls:    2,
+			expected: []*zeroconf.ServiceEntry{
+				newEntry("host0", 120),
+				newEntry("host1", 120),
+				newEntry("host5", 100),
+				newEntry("host6", 100),
+			},
 		},
 	}
 
@@ -130,6 +154,16 @@ func TestTTL(t *testing.T) {
 		expected               []*zeroconf.ServiceEntry
 		expectedBrowseCalls    int
 	}{
+		{
+			name: "ttl_at_0_does_remove",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 1), // refresh expected at 0.6s
+			},
+			sleepBeforeExpectation: 2 * time.Second,
+			expected:               []*zeroconf.ServiceEntry{},
+			expectedBrowseCalls:    2,
+		},
+
 		{
 			name: "ttl_at_20pct_does_refresh",
 			input: []*zeroconf.ServiceEntry{

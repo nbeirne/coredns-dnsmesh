@@ -1,12 +1,13 @@
 package browser
 
 // Requirements of this mDNS Browser:
-// 1. It should have a long running zeroconf..NewResolver().Browse process running.
+// 1. It should have a long running zeroconf.NewResolver().Browse process running.
 // 2. When a new entry is received, it should be tracked in MdnsBrowser.services.
 // 3. When an entry with TTL = 0 is received, it should be removed from MdnsBrowser.services.
-// 4. When an entries TTL reaches 20% of its original value, the Browse() process should be canceled and restarted.
-// 5. When an entries TTL reaches 0, it should be removed from MdnsBrowser.services.
+// 4. When an entries TTL reaches 20% of its original value, a single zeroconf.Lookup() call should happen.
+// 5. When an entries TTL reaches 0, it should be removed from the Services() list.
 // 6. The stop function should wait until all go routines are finished (especially the browseLoop and receiveEntries routines)
+// 7. Every hour the Browse session should be restarted.
 
 import (
 	"context"
@@ -25,7 +26,7 @@ const (
 // a list of services through a cache object.
 type ZeroconfBrowser struct {
 	domain     string
-	mdnsType   string
+	service    string
 	interfaces *[]net.Interface // subnet to search on
 
 	zeroConfImpl ZeroconfInterface
@@ -40,7 +41,7 @@ type ZeroconfBrowser struct {
 
 func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser *ZeroconfBrowser) {
 	browser = &ZeroconfBrowser{}
-	browser.mdnsType = mdnsType
+	browser.service = mdnsType
 	browser.domain = domain
 	browser.interfaces = interfaces
 
@@ -82,29 +83,43 @@ func (m *ZeroconfBrowser) browseLoop() {
 	m.cancelBrowse = outerCancel
 
 	entriesCh := make(chan *zeroconf.ServiceEntry, 10)
-	lookupTriggerCh := make(chan *zeroconf.ServiceEntry, 10)
 
 	// This goroutine handles processing entries and shutting down.
 	go func() {
 		defer m.wg.Done()
-		m.handleDiscoveredService(entriesCh, lookupTriggerCh)
+		m.processEntries(outerCtx, entriesCh)
 	}()
 
-	session := NewZeroconfSession(m.zeroConfImpl, m.interfaces, m.mdnsType, m.domain)
-	session.Run(outerCtx, entriesCh)
-	close(entriesCh) // Close fanInCh only after the current session closes.
+	session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
+	session.Browse(outerCtx, m.service, m.domain, entriesCh)
+	close(entriesCh) // Close entriesCh only after the current session closes.
 }
 
-func (m *ZeroconfBrowser) handleDiscoveredService(entriesCh <-chan *zeroconf.ServiceEntry, lookupTriggerCh chan<- *zeroconf.ServiceEntry) {
+func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh <-chan *zeroconf.ServiceEntry) {
 	for entry := range entriesCh {
-		log.Debugf("Received entry via fan-in: %v", entry)
 		if entry == nil {
 			continue
 		}
 
-		localEntry := *entry
-		m.cache.addEntry(&localEntry)
+		if entry.TTL == 0 {
+			m.handleRemovedService(entry)
+		} else {
+			m.handleDiscoveredService(ctx, entry, entriesCh)
+		}
+	}
+	log.Debug("entriesCh closed, entry processing finished.")
+}
+
+func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
+	log.Debugf("Service removed/expired: %s", entry.Instance)
+	m.cache.removeEntry(entry.Instance)
 
 	}
-	log.Debug("fanInCh closed, entry processing finished.")
+}
+
+func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *zeroconf.ServiceEntry, entriesCh <-chan *zeroconf.ServiceEntry) {
+	log.Debugf("Discovered/updated service: %s with TTL %d", entry.Instance, entry.TTL)
+
+	// Add or update the entry in the cache
+	m.cache.addEntry(entry)
 }

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grandcat/zeroconf"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/grandcat/zeroconf"
 )
 
 func TestRun_GoroutineLeakOnContextCancel(t *testing.T) {
@@ -22,13 +22,13 @@ func TestRun_GoroutineLeakOnContextCancel(t *testing.T) {
 		},
 	}
 
-	session := NewZeroconfSession(mockImpl, nil, "_test._tcp", "local.")
+	session := NewZeroconfSession(mockImpl, nil)
 	fanInCh := make(chan *zeroconf.ServiceEntry)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	runFinished := make(chan struct{})
 	go func() {
-		session.Run(ctx, fanInCh)
+		session.Browse(ctx, "_test._tcp", "local.", fanInCh)
 		close(runFinished)
 	}()
 
@@ -59,12 +59,12 @@ func TestRun_DoesNotCloseInputChannel(t *testing.T) {
 		},
 	}
 
-	session := NewZeroconfSession(mockImpl, nil, "_test._tcp", "local.")
+	session := NewZeroconfSession(mockImpl, nil)
 	fanInCh := make(chan *zeroconf.ServiceEntry, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Run the session. It should complete without errors and without closing fanInCh.
-	if err := session.Run(ctx, fanInCh); err != nil {
+	if err := session.Browse(ctx, "_test._tcp", "local.", fanInCh); err != nil {
 		t.Fatalf("session.Run returned an unexpected error: %v", err)
 	}
 
@@ -92,16 +92,16 @@ func TestSessionStartup(t *testing.T) {
 		expectedError string
 		zeroconfImpl  ZeroconfInterface
 	}{
-		{"queryService succeeds", "", mockZeroconf{  resolver: &mockResolver{} }},
-		{"NewResolver fails", "test resolver error", mockZeroconf{ newResolverShouldError: true, resolver: &mockResolver{}, }},
-		{"Browse fails", "test browse error", mockZeroconf{ resolver: &mockResolver{ browseShouldError: true, }, }},
+		{"queryService succeeds", "", mockZeroconf{resolver: &mockResolver{}}},
+		{"NewResolver fails", "test resolver error", mockZeroconf{newResolverShouldError: true, resolver: &mockResolver{}}},
+		{"Browse fails", "test browse error", mockZeroconf{resolver: &mockResolver{browseShouldError: true}}},
 	}
 	for _, tc := range testCases {
 		t.Logf("Starting test: %s\n", tc.tcase)
-		session := NewZeroconfSession(tc.zeroconfImpl, b.interfaces, b.mdnsType, b.domain)
+		session := NewZeroconfSession(tc.zeroconfImpl, b.interfaces)
 		entriesCh := make(chan *zeroconf.ServiceEntry)
 		ctx, cancel := context.WithCancel(context.Background())
-		result := session.Run(ctx, entriesCh)
+		result := session.Browse(ctx, b.service, b.domain, entriesCh)
 		cancel()
 		<-ctx.Done()
 		if tc.expectedError == "" {

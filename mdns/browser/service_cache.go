@@ -80,6 +80,12 @@ func (sc *serviceCache) removeExpiredServices() {
 	}
 }
 
+func (sc *serviceCache) removeEntry(instance string) {
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
+	delete(*sc.services, instance)
+}
+
 // addEntry receives an entry and adds it to the service map or removes it if TTL is 0.
 func (sc *serviceCache) addEntry(entry *zeroconf.ServiceEntry) {
 	sc.mutex.Lock()

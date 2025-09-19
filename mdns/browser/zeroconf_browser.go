@@ -12,9 +12,12 @@ import (
 	"context"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/grandcat/zeroconf"
+)
+
+const (
+	TTLRefreshThreshold = 0.8
 )
 
 // Main browsing interface for zeroconf.
@@ -35,8 +38,8 @@ type ZeroconfBrowser struct {
 	cache        *serviceCache
 }
 
-func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser ZeroconfBrowser) {
-	browser = ZeroconfBrowser{}
+func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser *ZeroconfBrowser) {
+	browser = &ZeroconfBrowser{}
 	browser.mdnsType = mdnsType
 	browser.domain = domain
 	browser.interfaces = interfaces
@@ -78,69 +81,30 @@ func (m *ZeroconfBrowser) browseLoop() {
 	outerCtx, outerCancel := context.WithCancel(context.Background())
 	m.cancelBrowse = outerCancel
 
-	timer := time.NewTimer(0) // Fire immediately for the first browse
-	var sessionWg sync.WaitGroup
-	var cancelCurrentSession context.CancelFunc
-
-	fanInCh := make(chan *zeroconf.ServiceEntry, 10)
+	entriesCh := make(chan *zeroconf.ServiceEntry, 10)
+	lookupTriggerCh := make(chan *zeroconf.ServiceEntry, 10)
 
 	// This goroutine handles processing entries and shutting down.
 	go func() {
 		defer m.wg.Done()
-		for entry := range fanInCh {
-			log.Debugf("Received entry via fan-in: %v", entry)
-			if entry == nil {
-				continue
-			}
-
-			localEntry := *entry
-			m.cache.addEntry(&localEntry)
-
-			log.Debug("Recalculate signal received, resetting timer.")
-			if !timer.Stop() {
-				// <-timer.C // Drain the timer if it already fired.
-			}
-			refreshInterval := m.cache.calculateNextRefresh()
-			log.Debugf("Next mDNS refresh scheduled in %v", refreshInterval)
-			timer.Reset(refreshInterval)
-		}
-		log.Debug("fanInCh closed, entry processing finished.")
+		m.handleDiscoveredService(entriesCh, lookupTriggerCh)
 	}()
 
-	for {
-		select {
+	session := NewZeroconfSession(m.zeroConfImpl, m.interfaces, m.mdnsType, m.domain)
+	session.Run(outerCtx, entriesCh)
+	close(entriesCh) // Close fanInCh only after the current session closes.
+}
 
-		case <-outerCtx.Done():
-			if cancelCurrentSession != nil {
-				cancelCurrentSession()
-			}
-			sessionWg.Wait() // Wait for the final session to exit cleanly.
-			close(fanInCh)   // Close fanInCh only after all writers are done.
-			log.Debug("browseLoop: Stop signal received, cleaned up.")
-			return
-
-		case <-timer.C:
-			log.Debug("Refresh timer fired. Starting new mDNS browse.")
-			if cancelCurrentSession != nil {
-				cancelCurrentSession() // Signal the previous session to stop.
-				sessionWg.Wait()       // Wait for it to finish completely.
-			}
-
-			// Start a new non-blocking browse session.
-			var sessionCtx context.Context
-			sessionCtx, cancelCurrentSession = context.WithCancel(outerCtx)
-			session := NewZeroconfSession(m.zeroConfImpl, m.interfaces, m.mdnsType, m.domain)
-
-			sessionWg.Add(1)
-			go func() {
-				defer sessionWg.Done()
-				session.Run(sessionCtx, fanInCh)
-			}()
-			// After the session, remove expired services and reset the timer for the next session.
-			m.cache.removeExpiredServices()
-			refreshInterval := m.cache.calculateNextRefresh()
-			log.Debugf("Next mDNS refresh scheduled in %v", refreshInterval)
-			timer.Reset(refreshInterval)
+func (m *ZeroconfBrowser) handleDiscoveredService(entriesCh <-chan *zeroconf.ServiceEntry, lookupTriggerCh chan<- *zeroconf.ServiceEntry) {
+	for entry := range entriesCh {
+		log.Debugf("Received entry via fan-in: %v", entry)
+		if entry == nil {
+			continue
 		}
+
+		localEntry := *entry
+		m.cache.addEntry(&localEntry)
+
 	}
+	log.Debug("fanInCh closed, entry processing finished.")
 }

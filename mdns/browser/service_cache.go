@@ -91,12 +91,6 @@ func (sc *serviceCache) addEntry(entry *zeroconf.ServiceEntry) {
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
 
-	if entry.TTL == 0 {
-		log.Infof("Service expired via TTL=0: %s", entry.Instance)
-		delete(*sc.services, entry.Instance)
-		return
-	}
-
 	tracked := &trackedService{
 		entry:       entry,
 		originalTTL: time.Duration(entry.TTL) * time.Second,

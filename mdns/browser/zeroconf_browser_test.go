@@ -145,7 +145,7 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 	}
 }
 
-func _TestTTL(t *testing.T) {
+func TestTTL(t *testing.T) {
 	clog.D.Set()
 	testCases := []struct {
 		name                   string
@@ -153,15 +153,21 @@ func _TestTTL(t *testing.T) {
 		sleepBeforeExpectation time.Duration
 		expected               []*zeroconf.ServiceEntry
 		expectedBrowseCalls    int
+		expectedLookupCalls    map[string]int
 	}{
 		{
-			name: "ttl_at_0_does_remove",
+			name: "pre_ttl_does_not_refresh",
 			input: []*zeroconf.ServiceEntry{
-				newEntry("host0", 1), // refresh expected at 0.6s
+				newEntry("host0", 2),
 			},
-			sleepBeforeExpectation: 2 * time.Second,
-			expected:               []*zeroconf.ServiceEntry{},
-			expectedBrowseCalls:    2,
+			sleepBeforeExpectation: 1 * time.Second,
+			expected: []*zeroconf.ServiceEntry{
+				newEntry("host0", 2),
+			},
+			expectedBrowseCalls: 1,
+			expectedLookupCalls: map[string]int{
+				"host0": 0,
+			},
 		},
 
 		{
@@ -173,7 +179,23 @@ func _TestTTL(t *testing.T) {
 			expected: []*zeroconf.ServiceEntry{
 				newEntry("host0", 6), // should still be present
 			},
-			expectedBrowseCalls: 2,
+			expectedBrowseCalls: 1,
+			expectedLookupCalls: map[string]int{
+				"host0": 1,
+			},
+		},
+
+		{
+			name: "ttl_at_0_does_remove",
+			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 1), // refresh expected at 0.6s
+			},
+			sleepBeforeExpectation: 2 * time.Second,
+			expected:               []*zeroconf.ServiceEntry{},
+			expectedBrowseCalls:    1,
+			expectedLookupCalls: map[string]int{
+				"host0": 1,
+			},
 		},
 
 		{
@@ -183,10 +205,12 @@ func _TestTTL(t *testing.T) {
 				newEntry("host1", 6),  // refresh expected at 8s
 			},
 			sleepBeforeExpectation: 20 * time.Second, // 80% of 6 is 4.8
-			expected: []*zeroconf.ServiceEntry{
-				newEntry("host0", 6), // should still be present
+			expected:               []*zeroconf.ServiceEntry{},
+			expectedBrowseCalls:    1,
+			expectedLookupCalls: map[string]int{
+				"host0": 1,
+				"host1": 1,
 			},
-			expectedBrowseCalls: 2,
 		},
 	}
 
@@ -195,6 +219,7 @@ func _TestTTL(t *testing.T) {
 		fakeZeroconf := controllableFakeZeroconf{
 			browseEntriesCh: make(chan *zeroconf.ServiceEntry),
 			lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
+			lookupCalls:     make(map[string]int),
 		}
 
 		browser := NewZeroconfBrowser(".local", "_type", nil)
@@ -219,17 +244,28 @@ func _TestTTL(t *testing.T) {
 			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
 		}
 
+		for name, expectedLookups := range tc.expectedLookupCalls {
+			if fakeZeroconf.lookupCalls[name] != expectedLookups {
+				t.Errorf("Unexpected result in test %s, lookupCalls for %s is different than expected (%d != %d)", tc.name, name, fakeZeroconf.lookupCalls[name], expectedLookups)
+			}
+		}
+
 		if len(resultServices) != len(tc.expected) {
 			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
 			continue
 		}
 
 		for idx := range resultServices {
+			name := tc.expected[idx].Instance
 			if resultServices[idx].HostName != tc.expected[idx].HostName {
-				t.Errorf("Unexpected result in test %s, hostname at %d is different expected (%s != %s)", tc.name, idx, resultServices[idx].HostName, tc.expected[idx].HostName)
+				t.Errorf("Unexpected result in test %s, hostname for %s is different expected (%s != %s)", tc.name, name, resultServices[idx].HostName, tc.expected[idx].HostName)
 			}
 			if resultServices[idx].TTL != tc.expected[idx].TTL {
-				t.Errorf("Unexpected result in test %s, ttl at %d is different expected (%d != %d)", tc.name, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
+				t.Errorf("Unexpected result in test %s, ttl at %s is different expected (%d != %d)", tc.name, name, resultServices[idx].TTL, tc.expected[idx].TTL)
+			}
+
+			if expLookup, ok := tc.expectedLookupCalls[name]; ok && fakeZeroconf.lookupCalls[name] != expLookup {
+				t.Errorf("Unexpected result in test %s, lookupCalls for %s is different than expected (%d != %d)", tc.name, name, fakeZeroconf.lookupCalls[name], expLookup)
 			}
 		}
 	}

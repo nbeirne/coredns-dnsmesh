@@ -13,6 +13,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/grandcat/zeroconf"
 )
@@ -37,6 +38,7 @@ type ZeroconfBrowser struct {
 
 	cancelBrowse context.CancelFunc
 	cache        *serviceCache
+	timers       map[string]*time.Timer
 }
 
 func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (browser *ZeroconfBrowser) {
@@ -48,6 +50,7 @@ func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (b
 	browser.zeroConfImpl = ZeroconfImpl{}
 
 	browser.cache = newServiceCache()
+	browser.timers = make(map[string]*time.Timer)
 	return browser
 }
 
@@ -64,6 +67,11 @@ func (m *ZeroconfBrowser) Stop() {
 		log.Info("Stopping MdnsBrowser...")
 		if cancel := m.cancelBrowse; cancel != nil {
 			cancel()
+		}
+
+		// Stop all active timers
+		for _, timer := range m.timers {
+			timer.Stop()
 		}
 
 		m.wg.Wait()
@@ -95,7 +103,7 @@ func (m *ZeroconfBrowser) browseLoop() {
 	close(entriesCh) // Close entriesCh only after the current session closes.
 }
 
-func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh <-chan *zeroconf.ServiceEntry) {
+func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *zeroconf.ServiceEntry) {
 	for entry := range entriesCh {
 		if entry == nil {
 			continue
@@ -104,7 +112,7 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh <-chan *
 		if entry.TTL == 0 {
 			m.handleRemovedService(entry)
 		} else {
-			m.handleDiscoveredService(ctx, entry, entriesCh)
+			m.handleDiscoveredService(ctx, entry, entriesCh) // may write to entriesCh
 		}
 	}
 	log.Debug("entriesCh closed, entry processing finished.")
@@ -114,12 +122,45 @@ func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
 	log.Debugf("Service removed/expired: %s", entry.Instance)
 	m.cache.removeEntry(entry.Instance)
 
+	if timer, ok := m.timers[entry.Instance]; ok {
+		timer.Stop()
+		delete(m.timers, entry.Instance)
 	}
 }
 
-func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *zeroconf.ServiceEntry, entriesCh <-chan *zeroconf.ServiceEntry) {
+func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *zeroconf.ServiceEntry, entriesCh chan<- *zeroconf.ServiceEntry) {
 	log.Debugf("Discovered/updated service: %s with TTL %d", entry.Instance, entry.TTL)
 
 	// Add or update the entry in the cache
 	m.cache.addEntry(entry)
+
+	// Stop any existing timer for this service instance
+	if timer, ok := m.timers[entry.Instance]; ok {
+		timer.Stop()
+	}
+
+	// We will refresh the service when its TTL is getting low.
+	refreshDuration := time.Duration(entry.TTL) * time.Duration(float64(time.Second)*TTLRefreshThreshold)
+
+	// // Create a new timer to trigger a lookup for this service.
+	m.timers[entry.Instance] = time.AfterFunc(refreshDuration, func() {
+		log.Debugf("TTL for %s is low, performing lookup.", entry.Instance)
+
+		// Perform a lookup in a separate goroutine to avoid blocking the timer func.
+		go func() {
+			// Use a timeout for the lookup to prevent it from hanging indefinitely.
+			lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
+			lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
+			defer lCancel()
+
+			session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
+			err := session.Lookup(lCtx, entry.Instance, m.service, m.domain, entriesCh)
+
+			// We need a new resolver for a one-off lookup.
+			if err != nil {
+				log.Errorf("Failed to create resolver for lookup: %v", err)
+				return
+			}
+		}()
+	})
 }

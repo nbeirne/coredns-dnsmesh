@@ -1,0 +1,11 @@
+. {
+
+  self host0.example.com
+
+  log 
+  debug
+  errors
+
+  reload
+}
+

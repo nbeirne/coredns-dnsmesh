@@ -1,4 +1,4 @@
-module github.com/nbeirne/coredns-meshdns/self
+module github.com/nbeirne/coredns-dnsmesh/self
 
 go 1.25.1
 

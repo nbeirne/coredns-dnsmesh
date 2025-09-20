@@ -1,6 +1,7 @@
 .:53 {
 
-  dnsmesh_mdns example.com. {
+  dnsmesh_mdns sky.nbeirne.ca. {
+    type _dns._udp
     iface_bind_subnet 192.168.2.1/24
   }
 

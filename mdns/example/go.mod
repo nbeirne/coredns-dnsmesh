@@ -1,4 +1,4 @@
-module github.com/FrazerSeymour/dns
+module github.com/nbeirne/dns
 
 go 1.25.1
 
@@ -7,8 +7,6 @@ require (
 	github.com/coredns/records v0.0.0-20230310133434-a3157e710d9e
 	github.com/kevinjqiu/coredns-dockerdiscovery v0.0.0-20240325134730-2f65ec48a254
 	github.com/nbeirne/coredns-dnsmesh/mdns v0.0.0-00010101000000-000000000000
-	github.com/nbeirne/coredns-dnsmesh/test_provider v0.0.0-00010101000000-000000000000
-	github.com/nbeirne/coredns-dnsmesh/util v0.0.0-00010101000000-000000000000
 	github.com/nbeirne/coredns-traefik v0.0.0-20241209160058-8a0511be5456
 	github.com/networkservicemesh/fanout v1.11.4-0.20250612154940-e635d0cda3c4
 	github.com/openshift/coredns-mdns v0.0.0-20210625150643-8c0b6474833f
@@ -73,10 +71,7 @@ require (
 	google.golang.org/protobuf v1.36.8 // indirect
 )
 
-replace github.com/nbeirne/coredns-dnsmesh/util => ../util
 
-replace github.com/nbeirne/coredns-dnsmesh/mdns => ../mdns
+replace github.com/nbeirne/coredns-dnsmesh/mdns => ../
 
-replace github.com/nbeirne/coredns-dnsmesh/test_provider => ../test_provider
-
-replace github.com/nbeirne/coredns-dnsmesh/mdns/browser => ../mdns/browser
+replace github.com/nbeirne/coredns-dnsmesh/mdns/browser => ../browser

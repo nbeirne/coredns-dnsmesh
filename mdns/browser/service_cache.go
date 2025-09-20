@@ -43,7 +43,6 @@ func (sc *serviceCache) addEntry(entry *zeroconf.ServiceEntry) {
 		expiry:      time.Now().Add(time.Duration(entry.TTL) * time.Second),
 	}
 
-	// log.Infof("Service Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d\n", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
 	(*sc.services)[entry.Instance] = tracked
 }
 

@@ -47,7 +47,7 @@ func (m *MdnsAdvertise) StartAdvertise() error {
 		m.StopAdvertise()
 	}
 
-	log.Infof("Start advertising... Instance: %s\n    Service: %s\n    Port: %d\n    TTL: %d", m.instanceName, m.service, m.port, m.ttl)
+	log.Infof("Start advertising...\n   Instance: %s\n    Service: %s\n    Port: %d\n    TTL: %d", m.instanceName, m.service, m.port, m.ttl)
 
 	var ifaces []net.Interface
 	if m.ifaceBindSubnet != nil {

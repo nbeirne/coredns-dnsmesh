@@ -21,15 +21,15 @@ import (
 // TODO: parse fanout options
 
 // init registers this plugin.
-func init() { 
-	plugin.Register(QueryPluginName, setupQuery) 
-	plugin.Register(AdvertisePluginName, setupAdvertise) 
+func init() {
+	plugin.Register(QueryPluginName, setupQuery)
+	plugin.Register(AdvertisePluginName, setupAdvertise)
 }
 
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
 func setupQuery(c *caddy.Controller) error {
-	m , err := parseQueryOptions(c)
+	m, err := parseQueryOptions(c)
 	if err != nil {
 		return err
 	}
@@ -44,11 +44,11 @@ func setupQuery(c *caddy.Controller) error {
 		return m
 	})
 
-	c.OnShutdown(func () error {
+	c.OnShutdown(func() error {
 		m.browser.Stop()
 		return nil
 	})
-	
+
 	// All OK, return a nil error.
 	return nil
 }
@@ -59,13 +59,13 @@ func setupAdvertise(c *caddy.Controller) error {
 	ttl := DefaultTTL
 
 	shortHostname, err := getShortHostname()
-	if (err != nil) {
+	if err != nil {
 		return err
 	}
 	instanceName := AdvertisingPrefix + shortHostname
 
 	port, err := getServerPort(c)
-	if (err != nil) {
+	if err != nil {
 		port = 0
 	}
 
@@ -74,7 +74,7 @@ func setupAdvertise(c *caddy.Controller) error {
 	c.Next()
 	for c.NextBlock() {
 		switch c.Val() {
-		case "instance_name": 
+		case "instance_name":
 			remaining := c.RemainingArgs()
 			if len(remaining) != 1 {
 				return c.ArgErr()
@@ -110,7 +110,7 @@ func setupAdvertise(c *caddy.Controller) error {
 			}
 			ttl = uint32(ttlInt)
 
-		case "iface_bind_subnet": 
+		case "iface_bind_subnet":
 			remaining := c.RemainingArgs()
 			if len(remaining) != 1 {
 				return c.ArgErr()
@@ -130,14 +130,14 @@ func setupAdvertise(c *caddy.Controller) error {
 	advertiser := NewMdnsAdvertise(instanceName, mdnsType, port, ttl)
 	advertiser.BindToSubnet(ifaceBindSubnet)
 
-	c.OnStartup(func () error {
+	c.OnStartup(func() error {
 		return advertiser.StartAdvertise()
-	}) 
+	})
 
-	c.OnShutdown(func () error {
+	c.OnShutdown(func() error {
 		advertiser.StopAdvertise()
 		return nil
-	}) 
+	})
 
 	return nil
 }
@@ -171,7 +171,6 @@ func getServerPort(c *caddy.Controller) (int, error) {
 	return port, err
 }
 
-
 func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 	m := MdnsMeshPlugin{}
 
@@ -191,14 +190,14 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 
 		for c.NextBlock() {
 			switch c.Val() {
-			case "type": 
+			case "type":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
 				}
 				mdnsType = remaining[0]
 
-			case "iface_bind_subnet": 
+			case "iface_bind_subnet":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -209,7 +208,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 				}
 				ifaceBindSubnet = subnet
 
-			case "ignore_self": 
+			case "ignore_self":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -220,7 +219,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 				}
 				m.ignoreSelf = ignoreSelf
 
-			case "filter": 
+			case "filter":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -231,22 +230,26 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 				}
 				m.filter = filter
 
-			case "address_mode": 
+			case "address_mode":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
 				}
 
 				switch remaining[0] {
-				case "prefer_ipv6": m.addrMode = PreferIPv6
-				case "prefer_ipv4": m.addrMode = PreferIPv4
-				case "only_ipv6": m.addrMode = IPv6Only
-				case "only_ipv4": m.addrMode = IPv4Only
+				case "prefer_ipv6":
+					m.addrMode = PreferIPv6
+				case "prefer_ipv4":
+					m.addrMode = PreferIPv4
+				case "only_ipv6":
+					m.addrMode = IPv6Only
+				case "only_ipv4":
+					m.addrMode = IPv4Only
 				default:
 					return nil, plugin.Error(QueryPluginName, c.Errf("unknown address_mode: %s", remaining[0]))
 				}
 
-			case "addresses_per_host": 
+			case "addresses_per_host":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -257,7 +260,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 				}
 				m.addrsPerHost = addrsPerHostInt
 
-			case "timeout": 
+			case "timeout":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -268,7 +271,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 				}
 				m.Timeout = timeout
 
-			case "zone": 
+			case "zone":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
 					return nil, plugin.Error(QueryPluginName, c.ArgErr())
@@ -315,12 +318,11 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 	}
 
 	browser := browser.NewZeroconfBrowser("local.", mdnsType, ifaces)
+	browser.Log = log
 	m.browser = browser
 
 	return &m, nil
 }
-
-
 
 // TODO: test parsing:
 //:53

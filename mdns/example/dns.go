@@ -6,7 +6,9 @@ import (
 	_ "github.com/coredns/coredns/plugin/hosts"
 	_ "github.com/coredns/coredns/plugin/log"
 	_ "github.com/coredns/coredns/plugin/view"
+	_ "github.com/coredns/coredns/plugin/template"
 	_ "github.com/coredns/coredns/plugin/cache"
+	_ "github.com/coredns/coredns/plugin/health"
 	_ "github.com/coredns/coredns/plugin/whoami"
 	//_ "github.com/damomurf/coredns-tailscale"
 	_ "github.com/kevinjqiu/coredns-dockerdiscovery"
@@ -26,9 +28,7 @@ import (
 
 	_ "github.com/networkservicemesh/fanout"
 
-	_ "github.com/nbeirne/coredns-dnsmesh/test_provider"
 	_ "github.com/nbeirne/coredns-dnsmesh/mdns"
-	_ "github.com/nbeirne/coredns-dnsmesh/util"
 )
 
 var directives = []string{
@@ -45,7 +45,7 @@ var directives = []string{
 	"debug",
 	//"trace",
 	"ready",
-	"health:health",
+	"health",
 	// pprof:pprof
 	// prometheus:metrics
 	"errors",
@@ -65,7 +65,7 @@ var directives = []string{
 	// dnssec:dnssec
 	// autopath:autopath
 	// minimal:minimal
-	// template:template
+	"template",
 	// transfer:transfer
 	"hosts",
 	//"auto",
@@ -83,7 +83,6 @@ var directives = []string{
 	// secondary:secondary
 	// etcd:etcd
 	// loop:loop
-	"dnsmesh_test_provider",
 	"dnsmesh_mdns",
 	"dnsmesh_mdns_advertise",
 	"forward",

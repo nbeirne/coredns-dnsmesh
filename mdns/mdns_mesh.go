@@ -4,11 +4,11 @@ import (
 	"context"
 	"net"
 	"net/netip"
-	"time"
 	"regexp"
+	"time"
 
-	"github.com/miekg/dns"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/miekg/dns"
 
 	"github.com/grandcat/zeroconf"
 
@@ -21,33 +21,31 @@ import (
 const (
 	PreferIPv6 int = 0
 	PreferIPv4     = 1
-	IPv6Only	   = 2
-	IPv4Only 	   = 3
+	IPv6Only       = 2
+	IPv4Only       = 3
 )
 
 type MdnsMeshPlugin struct {
 	// fanout
-	Timeout               time.Duration 	// overall timeout for a whole request
-	Zone                  string 			// only process requests to this domain
-	Attempts              int 				// attempts per server
-	WorkerCount           int 				// number of requests to run in parallel
-	Next                  plugin.Handler    // next plugin if req not in zone or it is an excluded domains 
+	Timeout     time.Duration  // overall timeout for a whole request
+	Zone        string         // only process requests to this domain
+	Attempts    int            // attempts per server
+	WorkerCount int            // number of requests to run in parallel
+	Next        plugin.Handler // next plugin if req not in zone or it is an excluded domains
 	//ExcludeDomains        Domain 			  // TODO??  exclude domains from the fanout
 	//ServerSelectionPolicy 	 			  // TODO??  select which servers are requested first
 	// TODO: fallthrough on error?
 
-
 	// internal filters
-	filter        *regexp.Regexp
-	ignoreSelf 	   bool
-	addrMode       int
-	addrsPerHost   int
+	filter       *regexp.Regexp
+	ignoreSelf   bool
+	addrMode     int
+	addrsPerHost int
 
-	browser       browser.MdnsBrowserInterface
+	browser browser.MdnsBrowserInterface
 }
 
 // TODO: fanout settings
-
 
 var log = clog.NewWithPlugin("dnsmesh_mdns")
 
@@ -63,16 +61,15 @@ func (m *MdnsMeshPlugin) Start() error {
 }
 
 func (m *MdnsMeshPlugin) CreateFanout() *fanout.Fanout {
-	f := &fanout.Fanout {
-		Timeout: m.Timeout,
-		ExcludeDomains: fanout.NewDomain(), // TODO - no excludes
-		Race: false,  // first to respond wins, even if !success
-		From: m.Zone,
-		Attempts: m.Attempts,
+	f := &fanout.Fanout{
+		Timeout:               m.Timeout,
+		ExcludeDomains:        fanout.NewDomain(), // TODO - no excludes
+		Race:                  false,              // first to respond wins, even if !success
+		From:                  m.Zone,
+		Attempts:              m.Attempts,
 		ServerSelectionPolicy: &fanout.SequentialPolicy{},
-		Next: m.Next,
-		WorkerCount: m.WorkerCount,
-		// TODO: init workers properly
+		Next:                  m.Next,
+		WorkerCount:           m.WorkerCount, // TODO: init workers properly
 		//TapPlugin:            *dnstap.Dnstap, // TODO: setup tap plugin
 	}
 
@@ -85,7 +82,6 @@ func (m *MdnsMeshPlugin) CreateFanout() *fanout.Fanout {
 		}
 	}
 
-	// TODO: set max workers... 
 	return f
 }
 
@@ -96,11 +92,10 @@ func (m *MdnsMeshPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *
 	return f.ServeDNS(ctx, w, r)
 }
 
-
 func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
 	if m.filter != nil && !m.filter.MatchString(entry.Instance) {
 		log.Errorf("Ignoring entry '%s' because the instance name did not match the filter: '%s'",
-				entry.Instance, m.filter.String())
+			entry.Instance, m.filter.String())
 		return []netip.AddrPort{}
 	}
 
@@ -123,12 +118,12 @@ func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEnt
 		}
 
 		if m.ignoreSelf {
-		    iface, err := FindInterfaceForAddress(ip)
-		    if err == nil {
-		    	log.Debugf("Ignoring entry '%s' because the interface %s has the ip %s",
-		    		entry.Instance, iface.Name, ip.String())
-		    	continue // Skip this IP, it's local
-		    }
+			iface, err := FindInterfaceForAddress(ip)
+			if err == nil {
+				log.Debugf("Ignoring entry '%s' because the interface %s has the ip %s",
+					entry.Instance, iface.Name, ip.String())
+				continue // Skip this IP, it's local
+			}
 		}
 
 		addr, ok := netip.AddrFromSlice(ip)
@@ -143,4 +138,3 @@ func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEnt
 
 	return hosts
 }
-

@@ -54,12 +54,13 @@ func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (b
 	return browser
 }
 
-func (m *ZeroconfBrowser) Start() {
+func (m *ZeroconfBrowser) Start() error {
 	log.Info("Starting mDNS browser...")
 	m.startOnce.Do(func() {
 		m.wg.Add(1)
 		go m.browseLoop() // browseLoop will call wg.Done() when it exits
 	})
+	return nil
 }
 
 func (m *ZeroconfBrowser) Stop() {

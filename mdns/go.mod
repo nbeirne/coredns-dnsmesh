@@ -3,7 +3,6 @@ module github.com/nbeirne/coredns-dnsmesh/mdns
 go 1.24.3
 
 require (
-	github.com/celebdor/zeroconf v0.0.0-20210412110229-8ba34664402f
 	github.com/coredns/caddy v1.1.2-0.20241029205200-8de985351a98
 	github.com/coredns/coredns v1.12.2
 	github.com/miekg/dns v1.1.66
@@ -55,6 +54,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/csrf v1.7.3 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
+	github.com/grandcat/zeroconf v1.0.0 // indirect
 	github.com/grpc-ecosystem/grpc-opentracing v0.0.0-20180507213350-8e809c8a8645 // indirect
 	github.com/hdevalence/ed25519consensus v0.2.0 // indirect
 	github.com/illarion/gonotify/v3 v3.0.2 // indirect
@@ -104,3 +104,5 @@ require (
 )
 
 replace github.com/nbeirne/coredns-dnsmesh/util => ../util
+
+replace github.com/nbeirne/coredns-dnsmesh/mdns/browser => ./browser

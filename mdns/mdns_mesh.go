@@ -10,10 +10,12 @@ import (
 	"github.com/miekg/dns"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
-	"github.com/celebdor/zeroconf"
+	"github.com/grandcat/zeroconf"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/networkservicemesh/fanout"
+
+	"github.com/nbeirne/coredns-dnsmesh/mdns/browser"
 )
 
 const (
@@ -41,7 +43,7 @@ type MdnsMeshPlugin struct {
 	addrMode       int
 	addrsPerHost   int
 
-	browser       *MdnsBrowser
+	browser       browser.MdnsBrowserInterface
 }
 
 // TODO: fanout settings

@@ -3,7 +3,7 @@ package mdns
 import (
 	"net"
 
-	"github.com/celebdor/zeroconf"
+	"github.com/grandcat/zeroconf"
 )
 
 type MdnsAdvertise struct {

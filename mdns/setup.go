@@ -13,6 +13,8 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+
+	"github.com/nbeirne/coredns-dnsmesh/mdns/browser"
 )
 
 // TODO: more robust parsing of errors
@@ -301,11 +303,24 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 		}
 	}
 
-	browser := NewMdnsBrowser(mdnsType, ifaceBindSubnet)
-	m.browser = &browser
+	var ifaces *[]net.Interface
+	if ifaceBindSubnet != nil {
+		foundIfaces, err := FindInterfacesForSubnet(*ifaceBindSubnet)
+		if err != nil || len(foundIfaces) == 0 {
+			log.Errorf("Failed to find interface for '%s'\n", ifaceBindSubnet.String())
+			ifaces = &([]net.Interface{})
+		} else {
+			ifaces = &foundIfaces
+		}
+	}
+
+	browser := browser.NewZeroconfBrowser("local.", mdnsType, ifaces)
+	m.browser = browser
 
 	return &m, nil
 }
+
+
 
 // TODO: test parsing:
 //:53

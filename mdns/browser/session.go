@@ -33,11 +33,11 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
 	wg.Add(1)
 	go func() {
-		log.Debug("start fan in ch....")
-		defer log.Debug("end fan in ch....")
+		log.Debug("start browse receiver....")
+		defer log.Debug("end browse receiver....")
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			log.Debugf("Received entry via chan: %v", entry)
+			log.Debugf("Received entry via Browse: %v", entry)
 			entriesCh <- entry
 		}
 	}()
@@ -72,11 +72,11 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 	// Fanning in is a requirement becasue the localEntriesCh is ephemeral and managed by the session.
 	wg.Add(1)
 	go func() {
-		log.Debug("start fan in ch....")
-		defer log.Debug("end fan in ch....")
+		log.Debug("start lookup receiver....")
+		defer log.Debug("end lookup receiver...")
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			log.Debugf("Received entry via chan: %v", entry)
+			log.Debugf("Received entry via Lookup: %v", entry)
 			entriesCh <- entry
 		}
 	}()

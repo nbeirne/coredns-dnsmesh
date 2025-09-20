@@ -50,7 +50,7 @@ func main() {
 		ifaces = append(ifaces, *iface)
 	}
 
-	b := browser.NewMdnsBrowser("local.", *service, &ifaces)
+	b := browser.NewZeroconfBrowser("local.", *service, &ifaces)
 	b.Start()
 
 	// Wait for a SIGINT (Ctrl-C)

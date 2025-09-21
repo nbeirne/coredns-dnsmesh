@@ -13,7 +13,7 @@ const (
 	AdvertisePluginName = "dnsmesh_mdns_advertise"
 
 
-	AdvertisingPrefix = "meshdns "
+	AdvertisingPrefix = "meshdns-"
 	DefaultTTL uint32 = 120
 
 	DefaultTimeout time.Duration = time.Second * 30

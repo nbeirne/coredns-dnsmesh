@@ -141,14 +141,15 @@ func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *ze
 		timer.Stop()
 	}
 
-	// // Create a new timer to trigger a lookup for this service.
+	// Create a new timer to trigger a lookup for this service.
 	m.timers[entry.Instance] = time.AfterFunc(refreshDuration, func() {
-		m.Log.Debugf("TTL for %s is low, performing lookup.", entry.Instance)
+		m.Log.Infof("TTL for %s is low, performing lookup.", entry.Instance)
 
 		// Perform a lookup in a separate goroutine to avoid blocking the timer func.
 		go func() {
 			// Use a timeout for the lookup to prevent it from hanging indefinitely.
 			lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
+			m.Log.Infof("Lookup timeout for %v is %v", entry.Instance, lookupTimeout)
 			lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
 			defer lCancel()
 
@@ -159,6 +160,8 @@ func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *ze
 			if err != nil {
 				m.Log.Warningf("Failed to lookup service %s, removing from cache: %v", entry.Instance, err)
 				m.handleRemovedService(entry)
+			} else {
+				m.Log.Debugf("Lookup complete for %s...", entry.Instance)
 			}
 		}()
 	})

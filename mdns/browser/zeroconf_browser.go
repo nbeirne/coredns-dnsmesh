@@ -20,6 +20,9 @@ import (
 
 const (
 	TTLRefreshThreshold = 0.8
+	// MaxLookupTimeout is the maximum duration for a proactive mDNS lookup.
+	// A lookup shouldn't take longer than this on a local network.
+	MaxLookupTimeout = 15 * time.Second
 )
 
 // Main browsing interface for zeroconf.
@@ -49,8 +52,8 @@ func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (b
 	browser.service = mdnsType
 	browser.domain = domain
 	browser.interfaces = interfaces
-
 	browser.Log = NoLogger{}
+
 	browser.zeroConfImpl = ZeroconfImpl{}
 
 	browser.cache = newServiceCache()
@@ -114,6 +117,7 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 		}
 
 		if entry.TTL == 0 {
+			m.Log.Warningf("Service sent 0 TTL, removing from cache...: %s", entry.Instance)
 			m.handleRemovedService(entry)
 		} else {
 			m.handleDiscoveredService(ctx, entry, entriesCh) // may write to entriesCh
@@ -122,7 +126,6 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 }
 
 func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
-	m.Log.Warningf("Service removed/expired: %s", entry.Instance)
 	m.cache.removeEntry(entry.Instance)
 
 	m.timersMutex.Lock()
@@ -150,18 +153,33 @@ func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *ze
 
 	// Create a new timer to trigger a lookup for this service.
 	m.timers[entry.Instance] = time.AfterFunc(refreshDuration, func() {
+		// We are about to perform a lookup. We need to know if the lookup
+		// actually finds and sends a new entry to the channel. We can't
+		// easily inspect the channel, so we'll check the cache.
+		// We record the expiry of the *current* entry. If, after the lookup,
+		// the expiry time for this service instance has not changed, it means
+		// no new entry was received, and we should remove the service.
+		originalExpiry := m.cache.getExpiry(entry.Instance)
+
 		// Use a timeout for the lookup to prevent it from hanging indefinitely.
 		lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
-		m.Log.Infof("TTL for %v is low, performing lookup lasting %v", entry.Instance, lookupTimeout)
+		// Clamp the lookup timeout to a reasonable maximum (e.g., 15s).
+		lookupTimeout = min(lookupTimeout, MaxLookupTimeout)
+		m.Log.Infof("TTL for %v is low, performing lookup with timeout %v", entry.Instance, lookupTimeout)
 		lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
 		defer lCancel()
 
 		session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
 		err := session.Lookup(lCtx, entry.Instance, m.service, m.domain, entriesCh)
 
-		// We need a new resolver for a one-off lookup.
+		// If the lookup failed, or if it succeeded but found no entries (i.e., the
+		// cache entry was not updated with a new expiry), remove the service.
+		currentExpiry := m.cache.getExpiry(entry.Instance)
 		if err != nil {
 			m.Log.Warningf("Failed to lookup service %s, removing from cache: %v", entry.Instance, err)
+			m.handleRemovedService(entry)
+		} else if !currentExpiry.After(originalExpiry) {
+			m.Log.Warningf("Failed to lookup service %s, did not respond to the lookup. removing from cache.", entry.Instance)
 			m.handleRemovedService(entry)
 		} else {
 			m.Log.Debugf("Lookup complete for %s...", entry.Instance)

@@ -101,47 +101,51 @@ func TestZeroconfBrowserDoesAddService(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Logf("\nStarting test: %s\n", tc.name)
-		fakeZeroconf := &controllableFakeZeroconf{
-			browseEntriesCh: make(chan *zeroconf.ServiceEntry),
-			lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
-		}
-
-		browser := NewZeroconfBrowser(".local", "_type", nil)
-		browser.zeroConfImpl = fakeZeroconf
-		browser.Start()
-
-		for _, entry := range tc.input {
-			fakeZeroconf.browseEntriesCh <- entry
-		}
-
-		if tc.sleepBeforeExpectation > 0 {
-			time.Sleep(tc.sleepBeforeExpectation)
-		}
-
-		browser.Stop()
-
-		resultServices := browser.Services()
-		sort.Sort(ByInstance(resultServices))
-		sort.Sort(ByInstance(tc.expected))
-
-		if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
-			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
-		}
-
-		if len(resultServices) != len(tc.expected) {
-			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
-			continue
-		}
-
-		for idx := range resultServices {
-			if resultServices[idx].HostName != tc.expected[idx].HostName {
-				t.Errorf("Unexpected result in test %s, hostname at %d is different expected (%s != %s)", tc.name, idx, resultServices[idx].HostName, tc.expected[idx].HostName)
+		t.Run(tc.name, func(t *testing.T) {
+			logger := NewTestLogger(t)
+			fakeZeroconf := &controllableFakeZeroconf{
+				logger:          logger,
+				browseEntriesCh: make(chan *zeroconf.ServiceEntry),
+				lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
+				lookupCalls:     make(map[string]int),
 			}
-			if resultServices[idx].TTL != tc.expected[idx].TTL {
-				t.Errorf("Unexpected result in test %s, ttl at %d is different expected (%d != %d)", tc.name, idx, resultServices[idx].TTL, tc.expected[idx].TTL)
+
+			browser := NewZeroconfBrowser(".local", "_type", nil)
+			browser.Log = logger
+			browser.zeroConfImpl = fakeZeroconf
+			browser.Start()
+
+			for _, entry := range tc.input {
+				fakeZeroconf.browseEntriesCh <- entry
 			}
-		}
+
+			if tc.sleepBeforeExpectation > 0 {
+				time.Sleep(tc.sleepBeforeExpectation)
+			}
+
+			browser.Stop()
+
+			resultServices := browser.Services()
+			sort.Sort(ByInstance(resultServices))
+			sort.Sort(ByInstance(tc.expected))
+
+			if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
+				t.Errorf("Unexpected browseCalls: got %d, want %d", fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
+			}
+
+			if len(resultServices) != len(tc.expected) {
+				t.Fatalf("Unexpected result length: got %d, want %d", len(resultServices), len(tc.expected))
+			}
+
+			for idx := range resultServices {
+				if resultServices[idx].HostName != tc.expected[idx].HostName {
+					t.Errorf("Unexpected hostname at index %d: got %s, want %s", idx, resultServices[idx].HostName, tc.expected[idx].HostName)
+				}
+				if resultServices[idx].TTL != tc.expected[idx].TTL {
+					t.Errorf("Unexpected TTL at index %d: got %d, want %d", idx, resultServices[idx].TTL, tc.expected[idx].TTL)
+				}
+			}
+		})
 	}
 }
 
@@ -150,6 +154,7 @@ func TestTTL(t *testing.T) {
 	testCases := []struct {
 		name                   string
 		input                  []*zeroconf.ServiceEntry
+		lookupInput            []*zeroconf.ServiceEntry
 		sleepBeforeExpectation time.Duration
 		expected               []*zeroconf.ServiceEntry
 		expectedBrowseCalls    int
@@ -158,11 +163,14 @@ func TestTTL(t *testing.T) {
 		{
 			name: "pre_ttl_does_not_refresh",
 			input: []*zeroconf.ServiceEntry{
-				newEntry("host0", 2),
+				newEntry("host0", 6),
+			},
+			lookupInput: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // refresh expected at 4.8s
 			},
 			sleepBeforeExpectation: 1 * time.Second,
 			expected: []*zeroconf.ServiceEntry{
-				newEntry("host0", 2),
+				newEntry("host0", 6),
 			},
 			expectedBrowseCalls: 1,
 			expectedLookupCalls: map[string]int{
@@ -173,6 +181,9 @@ func TestTTL(t *testing.T) {
 		{
 			name: "ttl_at_20pct_does_refresh",
 			input: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // refresh expected at 4.8s
+			},
+			lookupInput: []*zeroconf.ServiceEntry{
 				newEntry("host0", 6), // refresh expected at 4.8s
 			},
 			sleepBeforeExpectation: 5 * time.Second, // 80% of 6 is 4.8
@@ -190,6 +201,7 @@ func TestTTL(t *testing.T) {
 			input: []*zeroconf.ServiceEntry{
 				newEntry("host0", 1), // refresh expected at 0.6s
 			},
+			lookupInput:            []*zeroconf.ServiceEntry{},
 			sleepBeforeExpectation: 2 * time.Second,
 			expected:               []*zeroconf.ServiceEntry{},
 			expectedBrowseCalls:    1,
@@ -204,6 +216,9 @@ func TestTTL(t *testing.T) {
 				newEntry("host0", 10), // refresh expected at 8s
 				newEntry("host1", 6),  // refresh expected at 8s
 			},
+			lookupInput: []*zeroconf.ServiceEntry{
+				newEntry("host0", 6), // refresh expected at 4.8s
+			},
 			sleepBeforeExpectation: 20 * time.Second, // 80% of 6 is 4.8
 			expected:               []*zeroconf.ServiceEntry{},
 			expectedBrowseCalls:    1,
@@ -215,59 +230,65 @@ func TestTTL(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Logf("\nStarting test: %s\n", tc.name)
-		fakeZeroconf := controllableFakeZeroconf{
-			browseEntriesCh: make(chan *zeroconf.ServiceEntry),
-			lookupEntriesCh: make(chan *zeroconf.ServiceEntry),
-			lookupCalls:     make(map[string]int),
-		}
-
-		browser := NewZeroconfBrowser(".local", "_type", nil)
-		browser.zeroConfImpl = &fakeZeroconf
-		browser.Start()
-
-		for _, entry := range tc.input {
-			fakeZeroconf.browseEntriesCh <- entry
-		}
-
-		if tc.sleepBeforeExpectation > 0 {
-			time.Sleep(tc.sleepBeforeExpectation)
-		}
-
-		browser.Stop()
-
-		resultServices := browser.Services()
-		sort.Sort(ByInstance(resultServices))
-		sort.Sort(ByInstance(tc.expected))
-
-		if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
-			t.Errorf("Unexpected result in test %s, browseCalls is different than expected (%d != %d)", tc.name, fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
-		}
-
-		for name, expectedLookups := range tc.expectedLookupCalls {
-			if fakeZeroconf.lookupCalls[name] != expectedLookups {
-				t.Errorf("Unexpected result in test %s, lookupCalls for %s is different than expected (%d != %d)", tc.name, name, fakeZeroconf.lookupCalls[name], expectedLookups)
-			}
-		}
-
-		if len(resultServices) != len(tc.expected) {
-			t.Errorf("Unexpected result in test %s, result is different length than expected (%d != %d)", tc.name, len(resultServices), len(tc.expected))
-			continue
-		}
-
-		for idx := range resultServices {
-			name := tc.expected[idx].Instance
-			if resultServices[idx].HostName != tc.expected[idx].HostName {
-				t.Errorf("Unexpected result in test %s, hostname for %s is different expected (%s != %s)", tc.name, name, resultServices[idx].HostName, tc.expected[idx].HostName)
-			}
-			if resultServices[idx].TTL != tc.expected[idx].TTL {
-				t.Errorf("Unexpected result in test %s, ttl at %s is different expected (%d != %d)", tc.name, name, resultServices[idx].TTL, tc.expected[idx].TTL)
+		t.Run(tc.name, func(t *testing.T) {
+			logger := NewTestLogger(t)
+			fakeZeroconf := controllableFakeZeroconf{
+				logger:          logger,
+				browseEntriesCh: make(chan *zeroconf.ServiceEntry, 10),
+				lookupEntriesCh: make(chan *zeroconf.ServiceEntry, 10),
+				lookupCalls:     make(map[string]int),
 			}
 
-			if expLookup, ok := tc.expectedLookupCalls[name]; ok && fakeZeroconf.lookupCalls[name] != expLookup {
-				t.Errorf("Unexpected result in test %s, lookupCalls for %s is different than expected (%d != %d)", tc.name, name, fakeZeroconf.lookupCalls[name], expLookup)
+			browser := NewZeroconfBrowser(".local", "_type", nil)
+			browser.Log = logger
+			browser.zeroConfImpl = &fakeZeroconf
+			browser.Start()
+
+			for _, entry := range tc.input {
+				fakeZeroconf.browseEntriesCh <- entry
 			}
-		}
+			for _, entry := range tc.lookupInput {
+				fakeZeroconf.lookupEntriesCh <- entry
+			}
+
+			if tc.sleepBeforeExpectation > 0 {
+				time.Sleep(tc.sleepBeforeExpectation)
+			}
+
+			browser.Stop()
+
+			resultServices := browser.Services()
+			sort.Sort(ByInstance(resultServices))
+			sort.Sort(ByInstance(tc.expected))
+
+			if tc.expectedBrowseCalls > 0 && fakeZeroconf.browseCalls != tc.expectedBrowseCalls {
+				t.Errorf("Unexpected browseCalls: got %d, want %d", fakeZeroconf.browseCalls, tc.expectedBrowseCalls)
+			}
+
+			for name, expectedLookups := range tc.expectedLookupCalls {
+				if fakeZeroconf.lookupCalls[name] != expectedLookups {
+					t.Errorf("Unexpected lookupCalls for %s: got %d, want %d", name, fakeZeroconf.lookupCalls[name], expectedLookups)
+				}
+			}
+
+			if len(resultServices) != len(tc.expected) {
+				t.Fatalf("Unexpected result length: got %d, want %d", len(resultServices), len(tc.expected))
+			}
+
+			for idx := range resultServices {
+				name := tc.expected[idx].Instance
+				if resultServices[idx].HostName != tc.expected[idx].HostName {
+					t.Errorf("Unexpected hostname for %s: got %s, want %s", name, resultServices[idx].HostName, tc.expected[idx].HostName)
+				}
+				if resultServices[idx].TTL != tc.expected[idx].TTL {
+					t.Errorf("Unexpected TTL for %s: got %d, want %d", name, resultServices[idx].TTL, tc.expected[idx].TTL)
+				}
+
+				if expLookup, ok := tc.expectedLookupCalls[name]; ok && fakeZeroconf.lookupCalls[name] != expLookup {
+					t.Errorf("Unexpected lookupCalls for %s: got %d, want %d", name, fakeZeroconf.lookupCalls[name], expLookup)
+				}
+			}
+		})
 	}
 
 }
@@ -365,6 +386,7 @@ func TestTTL(t *testing.T) {
 
 // A fake that can be controlled by the test
 type controllableFakeZeroconf struct {
+	logger          Logger
 	browseEntriesCh chan *zeroconf.ServiceEntry
 	lookupEntriesCh chan *zeroconf.ServiceEntry
 
@@ -375,6 +397,7 @@ type controllableFakeZeroconf struct {
 }
 
 func (zc *controllableFakeZeroconf) NewResolver(opts ...zeroconf.ClientOption) (ResolverInterface, error) {
+	zc.logger.Infof("FakeZeroconf new resolver...")
 	// Pass the browseStarted channel to the resolver
 	return &controllableFakeResolver{parent: zc}, nil
 }
@@ -384,6 +407,7 @@ type controllableFakeResolver struct {
 }
 
 func (r *controllableFakeResolver) Browse(ctx context.Context, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
+	r.parent.logger.Infof("FakeResolver browse...")
 	r.parent.mutex.Lock()
 	r.parent.browseCalls++
 	r.parent.mutex.Unlock()
@@ -401,6 +425,7 @@ func (r *controllableFakeResolver) Browse(ctx context.Context, service, domain s
 }
 
 func (r *controllableFakeResolver) Lookup(ctx context.Context, instance, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
+	r.parent.logger.Infof("FakeResolver lookup...")
 	r.parent.mutex.Lock()
 	r.parent.lookupCalls[instance]++
 	r.parent.mutex.Unlock()

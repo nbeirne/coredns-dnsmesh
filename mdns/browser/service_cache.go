@@ -60,3 +60,12 @@ func (sc *serviceCache) getServices() []*zeroconf.ServiceEntry {
 	}
 	return serviceEntries
 }
+
+func (sc *serviceCache) getExpiry(instance string) time.Time {
+	sc.mutex.RLock()
+	defer sc.mutex.RUnlock()
+	if tracked, ok := (*sc.services)[instance]; ok {
+		return tracked.expiry
+	}
+	return time.Time{} // Zero time if not found
+}

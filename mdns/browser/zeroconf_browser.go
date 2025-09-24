@@ -93,6 +93,18 @@ func (m *ZeroconfBrowser) Services() []*zeroconf.ServiceEntry {
 	return m.cache.getServices()
 }
 
+func (m *ZeroconfBrowser) Service() string {
+	return m.service
+}
+
+func (m *ZeroconfBrowser) Domain() string {
+	return m.domain
+}
+
+func (m *ZeroconfBrowser) Interfaces() *[]net.Interface {
+	return m.interfaces
+}
+
 func (m *ZeroconfBrowser) browseLoop() {
 	outerCtx, outerCancel := context.WithCancel(context.Background())
 	m.cancelBrowse = outerCancel

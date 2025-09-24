@@ -1,20 +1,20 @@
-
-package mdns 
+package mdns
 
 import (
 	"net"
-	"time"
-	"testing"
-	"regexp"
 	"reflect"
+	"regexp"
+	"testing"
+	"time"
 
 	"github.com/coredns/caddy"
+
+	"github.com/nbeirne/coredns-dnsmesh/mdns/browser"
 )
 
-
 func TestQuerySetup(t *testing.T) {
-	successCases := []string {
-		`meshdns-mdns example.com {
+	successCases := []string{
+		`dnsmesh_mdns example.com {
 			type sometype
 			iface_bind_subnet 127.0.0.0/24
 			ignore_self true
@@ -26,65 +26,65 @@ func TestQuerySetup(t *testing.T) {
 			attempts 3
 			worker_count 4
 		}`,
-		`meshdns-mdns example.com`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com`,
+		`dnsmesh_mdns example.com {
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			timeout 4m
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			filter ".*[A-Z]+.*"
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			address_mode only_ipv6
 			address_mode only_ipv4
 			address_mode prefer_ipv6
 			address_mode prefer_ipv4
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			ignore_self false
 		}`,
 	}
 
-	failureCases := []string {
-		`meshdns-mdns`,
-		`meshdns-mdns {
+	failureCases := []string{
+		`dnsmesh_mdns`,
+		`dnsmesh_mdns {
 			iface_bind_subnet 127.0.0.1
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			iface_bind_subnet 127.0.0.1
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			address_mode badmode
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			addresses_per_host n
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			ignore_self
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			ignore_self n
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			timeout 1
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			timeout n
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			timeout
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			worker_count
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			worker_count n
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			filter
 		}`,
-		`meshdns-mdns example.com {
+		`dnsmesh_mdns example.com {
 			unknown
 		}`,
 	}
@@ -104,32 +104,45 @@ func TestQuerySetup(t *testing.T) {
 	}
 
 	// check values of the full test case
+	mockIfaces := []net.Interface{{Name: "mock0"}}
+	mockFinder := func(subnet net.IPNet) ([]net.Interface, error) {
+		return mockIfaces, nil
+	}
+
 	c := caddy.NewTestController("dns", successCases[0])
-	meshdns, _ := parseQueryOptions(c)
+	meshdns, err := parseQueryOptions(c, mockFinder)
+	parsedBrowser := meshdns.browser.(*browser.ZeroconfBrowser)
+	if err != nil {
+		t.Fatalf("parseQueryOptions failed for a success case: %v", err)
+	}
 
-	_, subnet , _:= net.ParseCIDR("127.0.0.0/24")
+	expectedBrowser := browser.NewZeroconfBrowser("local.", "sometype", &mockIfaces)
 	expectedResult := MdnsMeshPlugin{
-		browser: &(MdnsBrowser {
-			mdnsType: "sometype",
-			ifaceBindSubnet: subnet,
-		}),
-		ignoreSelf: true,
-		filter: regexp.MustCompile(".*"),
-		addrMode: IPv6Only,
+		browser:      expectedBrowser,
+		ignoreSelf:   true,
+		filter:       regexp.MustCompile(".*"),
+		addrMode:     IPv6Only,
 		addrsPerHost: 1,
-		Timeout: time.Second * 2,
-		Zone: "somezone",
-		Attempts: 3,
-		WorkerCount: 4,
+		Timeout:      time.Second * 2,
+		Zone:         "somezone",
+		Attempts:     3,
+		WorkerCount:  4,
 	}
 
-	if expectedResult.browser.mdnsType != meshdns.browser.mdnsType {
-		t.Fatalf("Expected results to be equal: %v %v", expectedResult.browser.mdnsType, meshdns.browser.mdnsType)
+	// Check the browser's configured values individually instead of using DeepEqual.
+	if parsedBrowser.Service() != expectedBrowser.Service() {
+		t.Errorf("Expected browser service to be '%s', got '%s'", expectedBrowser.Service(), parsedBrowser.Service())
+	}
+	if parsedBrowser.Domain() != expectedBrowser.Domain() {
+		t.Errorf("Expected browser domain to be '%s', got '%s'", expectedBrowser.Domain(), parsedBrowser.Domain())
+	}
+	if !reflect.DeepEqual(parsedBrowser.Interfaces(), expectedBrowser.Interfaces()) {
+		t.Errorf("Expected browser interfaces to be %+v, got %+v", expectedBrowser.Interfaces(), parsedBrowser.Interfaces())
 	}
 
-	if !reflect.DeepEqual(expectedResult.browser.ifaceBindSubnet, meshdns.browser.ifaceBindSubnet) {
-		t.Fatalf("Expected results to be equal: %v %v", expectedResult.browser.ifaceBindSubnet, meshdns.browser.ifaceBindSubnet)
-	}
+	// Since browser's configuration is checked, we can nil it out for the rest of the struct comparison.
+	meshdns.browser = nil // a more robust comparison would be to compare all other fields individually.
+	expectedResult.browser = nil
 
 	if expectedResult.ignoreSelf != meshdns.ignoreSelf {
 		t.Fatalf("Expected results to be equal: %v %v", expectedResult.ignoreSelf, meshdns.ignoreSelf)
@@ -165,30 +178,31 @@ func TestQuerySetup(t *testing.T) {
 }
 
 func TestAdvertiseSetup(t *testing.T) {
-	successCases := []string {
-		`meshdns-mdns-advertise {
+	// Corrected plugin name from meshdns-mdns-advertise to dnsmesh_mdns_advertise
+	successCases := []string{
+		`dnsmesh_mdns_advertise {
 			instance_name testname
 			type  testtype
 			port 100
 			ttl 100
 			iface_bind_subnet 127.0.0.0/24
 		}`,
-		`meshdns-mdns-advertise`,
-		`meshdns-mdns-advertise {
+		`dnsmesh_mdns_advertise`,
+		`dnsmesh_mdns_advertise {
 		}`,
 	}
 
-	failureCases := []string {
+	failureCases := []string{
 		//`meshdns-mdns-advertise example.com`,
 		//`meshdns-mdns-advertise example.com {
 		//}`,
-		`meshdns-mdns-advertise {
+		`dnsmesh_mdns_advertise {
 			iface_bind_subnet 127.0.0.1
 		}`,
-		`meshdns-mdns-advertise {
+		`dnsmesh_mdns_advertise {
 			port m
 		}`,
-		`meshdns-mdns-advertise {
+		`dnsmesh_mdns_advertise {
 			ttl 1m
 		}`,
 	}
@@ -207,4 +221,3 @@ func TestAdvertiseSetup(t *testing.T) {
 		}
 	}
 }
-

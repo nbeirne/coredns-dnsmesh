@@ -26,10 +26,12 @@ func init() {
 	plugin.Register(AdvertisePluginName, setupAdvertise)
 }
 
+type interfaceFinder func(net.IPNet) ([]net.Interface, error)
+
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
 func setupQuery(c *caddy.Controller) error {
-	m, err := parseQueryOptions(c)
+	m, err := parseQueryOptions(c, FindInterfacesForSubnet)
 	if err != nil {
 		return err
 	}
@@ -155,7 +157,7 @@ func getShortHostname() (string, error) {
 func getServerPort(c *caddy.Controller) (int, error) {
 	keys := c.ServerBlockKeys
 	if len(keys) == 0 {
-		return 0, errors.New("Error fetching port from server block...")
+		return 0, errors.New("error fetching port from server block")
 	}
 	log.Debugf("got key: %v", keys)
 
@@ -171,7 +173,7 @@ func getServerPort(c *caddy.Controller) (int, error) {
 	return port, err
 }
 
-func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
+func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMeshPlugin, error) {
 	m := MdnsMeshPlugin{}
 
 	mdnsType := DefaultServiceType
@@ -308,7 +310,7 @@ func parseQueryOptions(c *caddy.Controller) (*MdnsMeshPlugin, error) {
 
 	var ifaces *[]net.Interface
 	if ifaceBindSubnet != nil {
-		foundIfaces, err := FindInterfacesForSubnet(*ifaceBindSubnet)
+		foundIfaces, err := findIfaces(*ifaceBindSubnet)
 		if err != nil || len(foundIfaces) == 0 {
 			log.Errorf("Failed to find interface for '%s'\n", ifaceBindSubnet.String())
 			ifaces = &([]net.Interface{})

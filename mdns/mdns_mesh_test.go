@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/celebdor/zeroconf"
+	"github.com/grandcat/zeroconf"
 )
 
 

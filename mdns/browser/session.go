@@ -23,6 +23,12 @@ func NewZeroconfSession(zeroConfImpl ZeroconfInterface, interfaces *[]net.Interf
 }
 
 func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain string, entriesCh chan<- *zeroconf.ServiceEntry) error {
+	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
+	if err != nil {
+		// No goroutine was started, so we can return directly.
+		return err
+	}
+
 	var wg sync.WaitGroup
 	localEntriesCh := make(chan *zeroconf.ServiceEntry)
 
@@ -35,13 +41,6 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 			entriesCh <- entry
 		}
 	}()
-
-	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
-	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
-	if err != nil {
-		close(localEntriesCh)
-		return err
-	}
 
 	// ASSUMPTION: resolver.Browse will close localEntriesCh when ctx is cancelled or times out.
 	err = resolver.Browse(ctx, service, domain, localEntriesCh)
@@ -54,6 +53,12 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 }
 
 func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service string, domain string, entriesCh chan<- *zeroconf.ServiceEntry) error {
+	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
+	if err != nil {
+		// No goroutine was started, so we can return directly.
+		return err
+	}
+
 	var wg sync.WaitGroup
 	localEntriesCh := make(chan *zeroconf.ServiceEntry)
 
@@ -66,13 +71,6 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 			entriesCh <- entry
 		}
 	}()
-
-	// hand off control of localEntriesCh to browseMdns. Its expected to close the channel internally.
-	resolver, err := zs.zeroConfImpl.NewResolver(zs.getClientOption())
-	if err != nil {
-		close(localEntriesCh)
-		return err
-	}
 
 	// ASSUMPTION: resolver.Browse will close localEntriesCh when ctx is cancelled or times out.
 	err = resolver.Lookup(ctx, instance, service, domain, localEntriesCh)

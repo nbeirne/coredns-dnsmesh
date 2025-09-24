@@ -39,6 +39,7 @@ type ZeroconfBrowser struct {
 	wg        sync.WaitGroup
 
 	cancelBrowse context.CancelFunc
+	timersMutex  sync.RWMutex
 	cache        *serviceCache
 	timers       map[string]*time.Timer
 }
@@ -48,8 +49,8 @@ func NewZeroconfBrowser(domain, mdnsType string, interfaces *[]net.Interface) (b
 	browser.service = mdnsType
 	browser.domain = domain
 	browser.interfaces = interfaces
-	browser.Log = NewDefaultLogger()
 
+	browser.Log = NoLogger{}
 	browser.zeroConfImpl = ZeroconfImpl{}
 
 	browser.cache = newServiceCache()
@@ -74,9 +75,11 @@ func (m *ZeroconfBrowser) Stop() {
 		}
 
 		// Stop all active timers
+		m.timersMutex.Lock()
 		for _, timer := range m.timers {
 			timer.Stop()
 		}
+		m.timersMutex.Unlock()
 
 		m.wg.Wait()
 		m.Log.Infof("Stopped MdnsBrowser.")
@@ -119,9 +122,11 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 }
 
 func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
-	m.Log.Debugf("Service removed/expired: %s", entry.Instance)
+	m.Log.Warningf("Service removed/expired: %s", entry.Instance)
 	m.cache.removeEntry(entry.Instance)
 
+	m.timersMutex.Lock()
+	defer m.timersMutex.Unlock()
 	if timer, ok := m.timers[entry.Instance]; ok {
 		timer.Stop()
 		delete(m.timers, entry.Instance)
@@ -137,32 +142,29 @@ func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *ze
 	m.cache.addEntry(entry)
 
 	// Stop any existing timer for this service instance
+	m.timersMutex.Lock()
+	defer m.timersMutex.Unlock()
 	if timer, ok := m.timers[entry.Instance]; ok {
 		timer.Stop()
 	}
 
 	// Create a new timer to trigger a lookup for this service.
 	m.timers[entry.Instance] = time.AfterFunc(refreshDuration, func() {
-		m.Log.Infof("TTL for %s is low, performing lookup.", entry.Instance)
+		// Use a timeout for the lookup to prevent it from hanging indefinitely.
+		lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
+		m.Log.Infof("TTL for %v is low, performing lookup lasting %v", entry.Instance, lookupTimeout)
+		lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
+		defer lCancel()
 
-		// Perform a lookup in a separate goroutine to avoid blocking the timer func.
-		go func() {
-			// Use a timeout for the lookup to prevent it from hanging indefinitely.
-			lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
-			m.Log.Infof("Lookup timeout for %v is %v", entry.Instance, lookupTimeout)
-			lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
-			defer lCancel()
+		session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
+		err := session.Lookup(lCtx, entry.Instance, m.service, m.domain, entriesCh)
 
-			session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
-			err := session.Lookup(lCtx, entry.Instance, m.service, m.domain, entriesCh)
-
-			// We need a new resolver for a one-off lookup.
-			if err != nil {
-				m.Log.Warningf("Failed to lookup service %s, removing from cache: %v", entry.Instance, err)
-				m.handleRemovedService(entry)
-			} else {
-				m.Log.Debugf("Lookup complete for %s...", entry.Instance)
-			}
-		}()
+		// We need a new resolver for a one-off lookup.
+		if err != nil {
+			m.Log.Warningf("Failed to lookup service %s, removing from cache: %v", entry.Instance, err)
+			m.handleRemovedService(entry)
+		} else {
+			m.Log.Debugf("Lookup complete for %s...", entry.Instance)
+		}
 	})
 }

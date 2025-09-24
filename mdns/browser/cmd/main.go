@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"flag"
 	"net"
 	"os"
@@ -51,6 +52,7 @@ func main() {
 	}
 
 	b := browser.NewZeroconfBrowser("local.", *service, &ifaces)
+	b.Log = NewPrintLogger()
 	b.Start()
 
 	// Wait for a SIGINT (Ctrl-C)
@@ -61,4 +63,26 @@ func main() {
 	fmt.Println("\nShutting down...")
 	b.Stop()
 	fmt.Println("Browser test finished.")
+}
+
+type PrintLogger struct{}
+
+func NewPrintLogger() *PrintLogger {
+	return &PrintLogger{}
+}
+
+func (l *PrintLogger) Debugf(format string, args ...interface{}) {
+	log.Printf("DEBUG: "+format, args...)
+}
+
+func (l *PrintLogger) Infof(format string, args ...interface{}) {
+	log.Printf("INFO: "+format, args...)
+}
+
+func (l *PrintLogger) Warningf(format string, args ...interface{}) {
+	log.Printf("WARN: "+format, args...)
+}
+
+func (l *PrintLogger) Errorf(format string, args ...interface{}) {
+	log.Printf("ERROR: "+format, args...)
 }

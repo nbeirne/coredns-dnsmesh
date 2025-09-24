@@ -14,7 +14,7 @@ const (
 
 
 	AdvertisingPrefix = "meshdns-"
-	DefaultTTL uint32 = 120
+	DefaultTTL uint32 = 320
 
 	DefaultTimeout time.Duration = time.Second * 30
 	DefaultAddrsPerHost = 1

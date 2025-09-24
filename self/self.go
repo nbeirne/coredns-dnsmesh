@@ -34,8 +34,6 @@ func (s Self) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 
 	zone := plugin.Zones(s.Zones).Matches(qname)
 
-	log.Warningf("zone: %v (%v). matches: %v", zone, s.Zones, plugin.Zones(s.Zones).Matches(qname))
-
 	if zone == "" {
 		return plugin.NextOrFailure(s.Name(), s.Next, ctx, w, r)
 	}

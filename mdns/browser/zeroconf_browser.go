@@ -5,12 +5,14 @@ package browser
 // 2. When a new entry is received, it should be tracked in MdnsBrowser.services.
 // 3. When an entry with TTL = 0 is received, it should be removed from MdnsBrowser.services.
 // 4. When an entries TTL reaches 20% of its original value, a single zeroconf.Lookup() call should happen.
+// 4. When an entry's TTL reaches 20% of its original value, a single zeroconf.Lookup() call should happen.
 // 5. When an entries TTL reaches 0, it should be removed from the Services() list.
 // 6. The stop function should wait until all go routines are finished (especially the browseLoop and receiveEntries routines)
 // 7. Every hour the Browse session should be restarted.
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -20,6 +22,9 @@ import (
 
 const (
 	TTLRefreshThreshold = 0.8
+	// JitterFactor determines the random variation applied to the refresh timer
+	// to prevent thundering herd problems. A value of 0.1 means +/- 10% jitter.
+	JitterFactor = 0.1
 	// MaxLookupTimeout is the maximum duration for a proactive mDNS lookup.
 	// A lookup shouldn't take longer than this on a local network.
 	MaxLookupTimeout = 15 * time.Second
@@ -129,17 +134,20 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 		}
 
 		if entry.TTL == 0 {
-			m.Log.Warningf("Service sent 0 TTL, removing from cache...: %s", entry.Instance)
-			m.handleRemovedService(entry)
+			m.Log.Infof("Service '%s' announced goodbye (TTL=0), removing from cache.", entry.Instance)
+			m.cache.removeEntry(entry.Instance)
+			m.stopRefreshForEntry(entry)
 		} else {
-			m.handleDiscoveredService(ctx, entry, entriesCh) // may write to entriesCh
+			m.Log.Infof("Discovered/updated service: %s", entry.Instance)
+			m.Log.Debugf("Discovered/updated service:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
+
+			m.cache.addEntry(entry)
+			m.scheduleRefreshForEntry(ctx, entry, entriesCh) // may write to entriesCh
 		}
 	}
 }
 
-func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
-	m.cache.removeEntry(entry.Instance)
-
+func (m *ZeroconfBrowser) stopRefreshForEntry(entry *zeroconf.ServiceEntry) {
 	m.timersMutex.Lock()
 	defer m.timersMutex.Unlock()
 	if timer, ok := m.timers[entry.Instance]; ok {
@@ -148,22 +156,17 @@ func (m *ZeroconfBrowser) handleRemovedService(entry *zeroconf.ServiceEntry) {
 	}
 }
 
-func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *zeroconf.ServiceEntry, entriesCh chan<- *zeroconf.ServiceEntry) {
-	refreshDuration := time.Duration(entry.TTL) * time.Duration(float64(time.Second)*TTLRefreshThreshold)
+func (m *ZeroconfBrowser) scheduleRefreshForEntry(ctx context.Context, entry *zeroconf.ServiceEntry, entriesCh chan<- *zeroconf.ServiceEntry) {
+	// Calculate the base refresh time (e.g., 80% of TTL), plus some jitter.
+	baseRefreshSeconds := float64(entry.TTL) * TTLRefreshThreshold
+	jitter := (rand.Float64()*2 - 1) * JitterFactor * baseRefreshSeconds
+	refreshDuration := time.Duration((baseRefreshSeconds + jitter) * float64(time.Second))
 
-	m.Log.Infof("Discovered service\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d (refresh in %v)", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL, refreshDuration)
-
-	// Add or update the entry in the cache
-	m.cache.addEntry(entry)
+	m.Log.Infof("Refresh scheduled for service: %v in %v (at %v)", entry.Instance, refreshDuration, time.Now().Add(refreshDuration))
 
 	// Stop any existing timer for this service instance
-	m.timersMutex.Lock()
-	defer m.timersMutex.Unlock()
-	if timer, ok := m.timers[entry.Instance]; ok {
-		timer.Stop()
-	}
+	m.stopRefreshForEntry(entry)
 
-	// Create a new timer to trigger a lookup for this service.
 	m.timers[entry.Instance] = time.AfterFunc(refreshDuration, func() {
 		// We are about to perform a lookup. We need to know if the lookup
 		// actually finds and sends a new entry to the channel. We can't
@@ -188,11 +191,17 @@ func (m *ZeroconfBrowser) handleDiscoveredService(ctx context.Context, entry *ze
 		// cache entry was not updated with a new expiry), remove the service.
 		currentExpiry := m.cache.getExpiry(entry.Instance)
 		if err != nil {
-			m.Log.Warningf("Failed to lookup service %s, removing from cache: %v", entry.Instance, err)
-			m.handleRemovedService(entry)
+			m.Log.Warningf("Lookup for service '%s' failed with error, removing from cache: %v", entry.Instance, err)
+			m.stopRefreshForEntry(entry)
+			localEntry := *entry
+			localEntry.TTL = 0
+			entriesCh <- &localEntry
 		} else if !currentExpiry.After(originalExpiry) {
-			m.Log.Warningf("Failed to lookup service %s, did not respond to the lookup. removing from cache.", entry.Instance)
-			m.handleRemovedService(entry)
+			m.Log.Warningf("Lookup for service '%s' succeeded but service did not respond, removing from cache.", entry.Instance)
+			m.stopRefreshForEntry(entry)
+			localEntry := *entry
+			localEntry.TTL = 0
+			entriesCh <- &localEntry
 		} else {
 			m.Log.Debugf("Lookup complete for %s...", entry.Instance)
 		}

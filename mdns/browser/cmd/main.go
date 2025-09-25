@@ -1,38 +1,36 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
-	"flag"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/nbeirne/coredns-dnsmesh/mdns/browser"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 )
 
 type arrayFlags []string
 
 // String is an implementation of the flag.Value interface
 func (i *arrayFlags) String() string {
-    return fmt.Sprintf("%v", *i)
+	return fmt.Sprintf("%v", *i)
 }
 
 // Set is an implementation of the flag.Value interface
 func (i *arrayFlags) Set(value string) error {
-    *i = append(*i, value)
-    return nil
+	*i = append(*i, value)
+	return nil
 }
 
-
 func main() {
-	clog.D.Set()
-
 	ifaceStrs := arrayFlags{}
 
 	service := flag.String("service", "", "The mDNS service to browse for (required)")
-	flag.Var(&ifaceStrs, "", "The interface to scan")
+	logLevel := flag.String("log-level", "info", "Set log level: debug, info, warn, error")
+	flag.Var(&ifaceStrs, "iface", "The interface to scan (can be specified multiple times)")
 
 	flag.Parse()
 
@@ -52,7 +50,7 @@ func main() {
 	}
 
 	b := browser.NewZeroconfBrowser("local.", *service, &ifaces)
-	b.Log = NewPrintLogger()
+	b.Log = NewPrintLogger(*logLevel)
 	b.Start()
 
 	// Wait for a SIGINT (Ctrl-C)
@@ -65,24 +63,52 @@ func main() {
 	fmt.Println("Browser test finished.")
 }
 
-type PrintLogger struct{}
+const (
+	levelDebug = iota
+	levelInfo
+	levelWarn
+	levelError
+)
 
-func NewPrintLogger() *PrintLogger {
-	return &PrintLogger{}
+type PrintLogger struct {
+	level int
+}
+
+func NewPrintLogger(levelStr string) *PrintLogger {
+	level := levelInfo // default
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		level = levelDebug
+	case "info":
+		level = levelInfo
+	case "warn":
+		level = levelWarn
+	case "error":
+		level = levelError
+	}
+	return &PrintLogger{level: level}
 }
 
 func (l *PrintLogger) Debugf(format string, args ...interface{}) {
-	log.Printf("DEBUG: "+format, args...)
+	if l.level <= levelDebug {
+		log.Printf("DEBUG: "+format, args...)
+	}
 }
 
 func (l *PrintLogger) Infof(format string, args ...interface{}) {
-	log.Printf("INFO: "+format, args...)
+	if l.level <= levelInfo {
+		log.Printf("INFO: "+format, args...)
+	}
 }
 
 func (l *PrintLogger) Warningf(format string, args ...interface{}) {
-	log.Printf("WARN: "+format, args...)
+	if l.level <= levelWarn {
+		log.Printf("WARN: "+format, args...)
+	}
 }
 
 func (l *PrintLogger) Errorf(format string, args ...interface{}) {
-	log.Printf("ERROR: "+format, args...)
+	if l.level <= levelError {
+		log.Printf("ERROR: "+format, args...)
+	}
 }

@@ -38,7 +38,8 @@ func (zs *ZeroconfSession) Browse(ctx context.Context, service string, domain st
 	go func() {
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			entriesCh <- entry
+			localEntry := *entry // make copy of entry so that zeroconf does not edit it from under us
+			entriesCh <- &localEntry
 		}
 	}()
 
@@ -68,7 +69,8 @@ func (zs *ZeroconfSession) Lookup(ctx context.Context, instance string, service 
 	go func() {
 		defer wg.Done()
 		for entry := range localEntriesCh {
-			entriesCh <- entry
+			localEntry := *entry // make copy of entry so that zeroconf does not edit it from under us
+			entriesCh <- &localEntry
 		}
 	}()
 

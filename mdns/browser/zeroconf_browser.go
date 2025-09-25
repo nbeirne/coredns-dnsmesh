@@ -138,9 +138,12 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 			m.cache.removeEntry(entry.Instance)
 			m.stopRefreshForEntry(entry)
 		} else {
-			m.Log.Infof("Discovered/updated service: %s", entry.Instance)
-			m.Log.Debugf("Discovered/updated service:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
-
+			// Only log the full details if the service is new.
+			if m.cache.getExpiry(entry.Instance).IsZero() {
+				m.Log.Infof("Discovered new service:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
+			} else {
+				m.Log.Debugf("Service updated:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
+			}
 			m.cache.addEntry(entry)
 			m.scheduleRefreshForEntry(ctx, entry, entriesCh) // may write to entriesCh
 		}
@@ -162,7 +165,7 @@ func (m *ZeroconfBrowser) scheduleRefreshForEntry(ctx context.Context, entry *ze
 	jitter := (rand.Float64()*2 - 1) * JitterFactor * baseRefreshSeconds
 	refreshDuration := time.Duration((baseRefreshSeconds + jitter) * float64(time.Second))
 
-	m.Log.Infof("Refresh scheduled for service: %v in %v", entry.Instance, refreshDuration)
+	m.Log.Debugf("Refresh scheduled for service: %v in %v", entry.Instance, refreshDuration)
 
 	// Stop any existing timer for this service instance
 	m.stopRefreshForEntry(entry)

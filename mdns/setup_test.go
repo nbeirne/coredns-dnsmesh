@@ -21,7 +21,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 	testCases := []struct {
 		name           string
 		input          string
-		expectedPlugin *MdnsMeshPlugin
+		expectedPlugin *MdnsForwardPlugin
 	}{
 		{
 			name: "full configuration",
@@ -33,11 +33,10 @@ func TestQuerySetupSuccess(t *testing.T) {
 			address_mode only_ipv6
 			addresses_per_host 1
 			timeout 5s
-			zone example.com
 			attempts 3
 			worker_count 4
 		}`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", "sometype", &mockIfaces),
 				ignoreSelf:   true,
 				filter:       regexp.MustCompile(".*"),
@@ -52,7 +51,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 		{
 			name:  "minimal config",
 			input: `dnsmesh_mdns example.com`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				addrMode:     DefaultAddrMode,
 				addrsPerHost: DefaultAddrsPerHost,
@@ -63,7 +62,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 		{
 			name:  "empty block",
 			input: `dnsmesh_mdns example.com {}`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				addrMode:     DefaultAddrMode,
 				addrsPerHost: DefaultAddrsPerHost,
@@ -74,7 +73,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 		{
 			name:  "custom timeout",
 			input: `dnsmesh_mdns example.com { timeout 4m }`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				addrMode:     DefaultAddrMode,
 				addrsPerHost: DefaultAddrsPerHost,
@@ -85,7 +84,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 		{
 			name:  "custom filter with space",
 			input: `dnsmesh_mdns example.com { filter ".*[A-Z] .*" }`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				filter:       regexp.MustCompile(".*[A-Z] .*"),
 				addrMode:     DefaultAddrMode,
@@ -102,7 +101,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 				address_mode prefer_ipv6
 				address_mode prefer_ipv4
 			}`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				addrMode:     PreferIPv4, // Last one wins
 				addrsPerHost: DefaultAddrsPerHost,
@@ -113,7 +112,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 		{
 			name:  "explicitly disable ignore_self",
 			input: `dnsmesh_mdns example.com { ignore_self false }`,
-			expectedPlugin: &MdnsMeshPlugin{
+			expectedPlugin: &MdnsForwardPlugin{
 				browser:      browser.NewZeroconfBrowser("local.", DefaultServiceType, nil),
 				ignoreSelf:   false,
 				addrMode:     DefaultAddrMode,
@@ -127,7 +126,7 @@ func TestQuerySetupSuccess(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := caddy.NewTestController("dns", tc.input)
-			plugin, err := parseQueryOptions(c, mockFinder)
+			plugin, err := parseForwardOptions(c, mockFinder)
 
 			if err != nil {
 				t.Fatalf("Expected no error, but got: %v", err)
@@ -204,10 +203,6 @@ func TestQuerySetupFailure(t *testing.T) {
 			input: `dnsmesh_mdns example.com { type }`,
 		},
 		{
-			name:  "missing zone value",
-			input: `dnsmesh_mdns example.com { zone }`,
-		},
-		{
 			name:  "missing attempts value",
 			input: `dnsmesh_mdns example.com { attempts }`,
 		},
@@ -216,7 +211,7 @@ func TestQuerySetupFailure(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := caddy.NewTestController("dns", tc.input)
-			_, err := parseQueryOptions(c, mockFinder)
+			_, err := parseForwardOptions(c, mockFinder)
 			if err == nil {
 				t.Fatal("Expected an error, but got none")
 			}
@@ -224,7 +219,7 @@ func TestQuerySetupFailure(t *testing.T) {
 	}
 }
 
-func assertQueryPluginsEqual(t *testing.T, expected, actual *MdnsMeshPlugin) {
+func assertQueryPluginsEqual(t *testing.T, expected, actual *MdnsForwardPlugin) {
 	t.Helper()
 
 	// Compare browser fields separately

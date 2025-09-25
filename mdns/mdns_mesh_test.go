@@ -37,12 +37,12 @@ func TestHostFiltering(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		plugin   MdnsMeshPlugin
+		plugin   MdnsForwardPlugin
 		expected []netip.AddrPort
 	}{
 		{
 			name:   "defaults (prefer ipv6)",
-			plugin: MdnsMeshPlugin{addrMode: PreferIPv6},
+			plugin: MdnsForwardPlugin{addrMode: PreferIPv6},
 			expected: mustParseAddrPorts(
 				"[::1]:10", "[::2]:10", "[::3]:10",
 				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
@@ -50,21 +50,21 @@ func TestHostFiltering(t *testing.T) {
 		},
 		{
 			name:   "ipv6_only",
-			plugin: MdnsMeshPlugin{addrMode: IPv6Only},
+			plugin: MdnsForwardPlugin{addrMode: IPv6Only},
 			expected: mustParseAddrPorts(
 				"[::1]:10", "[::2]:10", "[::3]:10",
 			),
 		},
 		{
 			name:   "ipv4_only",
-			plugin: MdnsMeshPlugin{addrMode: IPv4Only},
+			plugin: MdnsForwardPlugin{addrMode: IPv4Only},
 			expected: mustParseAddrPorts(
 				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
 			),
 		},
 		{
 			name:   "prefer_ipv4",
-			plugin: MdnsMeshPlugin{addrMode: PreferIPv4},
+			plugin: MdnsForwardPlugin{addrMode: PreferIPv4},
 			expected: mustParseAddrPorts(
 				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
 				"[::1]:10", "[::2]:10", "[::3]:10",
@@ -72,12 +72,12 @@ func TestHostFiltering(t *testing.T) {
 		},
 		{
 			name:     "filter",
-			plugin:   MdnsMeshPlugin{filter: regexp.MustCompile("nothing")},
+			plugin:   MdnsForwardPlugin{filter: regexp.MustCompile("nothing")},
 			expected: mustParseAddrPorts(),
 		},
 		{
 			name:   "filter_include",
-			plugin: MdnsMeshPlugin{filter: regexp.MustCompile(".*"), addrMode: PreferIPv6},
+			plugin: MdnsForwardPlugin{filter: regexp.MustCompile(".*"), addrMode: PreferIPv6},
 			expected: mustParseAddrPorts(
 				"[::1]:10", "[::2]:10", "[::3]:10",
 				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
@@ -85,7 +85,7 @@ func TestHostFiltering(t *testing.T) {
 		},
 		{
 			name:   "ignore_self",
-			plugin: MdnsMeshPlugin{ignoreSelf: true, addrMode: PreferIPv6},
+			plugin: MdnsForwardPlugin{ignoreSelf: true, addrMode: PreferIPv6},
 			expected: mustParseAddrPorts(
 				"[::2]:10", "[::3]:10",
 				"2.2.2.2:10", "3.3.3.3:10",
@@ -93,14 +93,14 @@ func TestHostFiltering(t *testing.T) {
 		},
 		{
 			name:   "addrs_per_host",
-			plugin: MdnsMeshPlugin{addrsPerHost: 2, addrMode: PreferIPv6},
+			plugin: MdnsForwardPlugin{addrsPerHost: 2, addrMode: PreferIPv6},
 			expected: mustParseAddrPorts(
 				"[::1]:10", "[::2]:10",
 			),
 		},
 		{
 			name:   "addrs_per_host_v4_only",
-			plugin: MdnsMeshPlugin{addrMode: IPv4Only, addrsPerHost: 2},
+			plugin: MdnsForwardPlugin{addrMode: IPv4Only, addrsPerHost: 2},
 			expected: mustParseAddrPorts(
 				"127.0.0.1:10", "2.2.2.2:10",
 			),

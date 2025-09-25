@@ -45,7 +45,7 @@ require (
 	github.com/moby/term v0.5.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nbeirne/coredns-dnsmesh/mdns/browser v0.0.0-00010101000000-000000000000 // indirect
+	github.com/nbeirne/coredns-dnsmesh/mdns/browser v0.0.0-20250921002629-b8d56dfbf63d // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/openshift/mdns-publisher v0.0.0-20220222182051-8fef1ccb075f // indirect
@@ -70,7 +70,6 @@ require (
 	google.golang.org/grpc v1.75.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
-
 
 replace github.com/nbeirne/coredns-dnsmesh/mdns => ../
 

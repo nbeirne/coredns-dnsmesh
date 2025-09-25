@@ -83,7 +83,7 @@ var directives = []string{
 	// secondary:secondary
 	// etcd:etcd
 	// loop:loop
-	"dnsmesh_mdns",
+	"dnsmesh_mdns_forward",
 	"dnsmesh_mdns_advertise",
 	"forward",
 	"fanout",

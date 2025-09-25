@@ -22,7 +22,7 @@ import (
 
 // init registers this plugin.
 func init() {
-	plugin.Register(QueryPluginName, setupQuery)
+	plugin.Register(ForwardPluginName, setupForward)
 	plugin.Register(AdvertisePluginName, setupAdvertise)
 }
 
@@ -30,8 +30,8 @@ type interfaceFinder func(net.IPNet) ([]net.Interface, error)
 
 // setup is the function that gets called when the config parser see the token "example". Setup is responsible
 // for parsing any extra options the example plugin may have. The first token this function sees is "example".
-func setupQuery(c *caddy.Controller) error {
-	m, err := parseQueryOptions(c, FindInterfacesForSubnet)
+func setupForward(c *caddy.Controller) error {
+	m, err := parseForwardOptions(c, FindInterfacesForSubnet)
 	if err != nil {
 		return err
 	}
@@ -190,8 +190,8 @@ func parseSingleArg(c *caddy.Controller) (string, error) {
 	return val, nil
 }
 
-func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMeshPlugin, error) {
-	m := MdnsMeshPlugin{}
+func parseForwardOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsForwardPlugin, error) {
+	m := MdnsForwardPlugin{}
 
 	mdnsType := DefaultServiceType
 	ifaceBindSubnet := (*net.IPNet)(nil)
@@ -203,7 +203,7 @@ func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMe
 	for c.Next() {
 		args := c.RemainingArgs()
 		if len(args) < 1 {
-			return nil, plugin.Error(QueryPluginName, c.Errf("a zone must be specified"))
+			return nil, plugin.Error(ForwardPluginName, c.Errf("a zone must be specified"))
 		}
 		m.Zone = args[0]
 
@@ -212,47 +212,47 @@ func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMe
 			case "type":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				mdnsType = val
 
 			case "iface_bind_subnet":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				_, subnet, err := net.ParseCIDR(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse subnet: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("failed to parse subnet: %s", val))
 				}
 				ifaceBindSubnet = subnet
 
 			case "ignore_self":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				ignoreSelf, err := strconv.ParseBool(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse boolean for 'ignore_self': %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("failed to parse boolean for 'ignore_self': %s", val))
 				}
 				m.ignoreSelf = ignoreSelf
 
 			case "filter":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				filter, err := regexp.Compile(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to compile regex for 'filter': %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("failed to compile regex for 'filter': %s", val))
 				}
 				m.filter = filter
 
 			case "address_mode":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				switch val {
 				case "prefer_ipv6":
@@ -264,62 +264,55 @@ func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMe
 				case "only_ipv4":
 					m.addrMode = IPv4Only
 				default:
-					return nil, plugin.Error(QueryPluginName, c.Errf("unknown address_mode: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("unknown address_mode: %s", val))
 				}
 
 			case "addresses_per_host":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				addrsPerHostInt, err := strconv.Atoi(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("addresses_per_host could not be parsed: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("addresses_per_host could not be parsed: %s", val))
 				}
 				m.addrsPerHost = addrsPerHostInt
 
 			case "timeout":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				timeout, err := time.ParseDuration(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("invalid duration for timeout: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("invalid duration for timeout: %s", val))
 				}
 				m.Timeout = timeout
-
-			case "zone":
-				val, err := parseSingleArg(c)
-				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
-				}
-				m.Zone = val
 
 			case "attempts":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				attempts, err := strconv.Atoi(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("attempts is not an integer: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("attempts is not an integer: %s", val))
 				}
 				m.Attempts = attempts
 
 			case "worker_count":
 				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, err)
+					return nil, plugin.Error(ForwardPluginName, err)
 				}
 				workerCount, err := strconv.Atoi(val)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("worker_count is not an integer: %s", val))
+					return nil, plugin.Error(ForwardPluginName, c.Errf("worker_count is not an integer: %s", val))
 				}
 				m.WorkerCount = workerCount
 
 			default:
-				return nil, plugin.Error(QueryPluginName, c.Errf("unknown option: %s", c.Val()))
+				return nil, plugin.Error(ForwardPluginName, c.Errf("unknown option: %s", c.Val()))
 			}
 		}
 	}

@@ -25,7 +25,7 @@ const (
 	IPv4Only       = 3
 )
 
-type MdnsMeshPlugin struct {
+type MdnsForwardPlugin struct {
 	// fanout
 	Timeout     time.Duration  // overall timeout for a whole request
 	Zone        string         // only process requests to this domain
@@ -47,12 +47,12 @@ type MdnsMeshPlugin struct {
 
 // TODO: fanout settings
 
-var log = clog.NewWithPlugin("dnsmesh_mdns")
+var log = clog.NewWithPlugin(ForwardPluginName)
 
 // Name implements the Handler interface.
-func (m *MdnsMeshPlugin) Name() string { return QueryPluginName }
+func (m *MdnsForwardPlugin) Name() string { return ForwardPluginName }
 
-func (m *MdnsMeshPlugin) Start() error {
+func (m *MdnsForwardPlugin) Start() error {
 	log.Infof("Starting meshdns...")
 
 	m.browser.Start()
@@ -60,7 +60,7 @@ func (m *MdnsMeshPlugin) Start() error {
 	return nil
 }
 
-func (m *MdnsMeshPlugin) CreateFanout() *fanout.Fanout {
+func (m *MdnsForwardPlugin) CreateFanout() *fanout.Fanout {
 	f := &fanout.Fanout{
 		Timeout:               m.Timeout,
 		ExcludeDomains:        fanout.NewDomain(), // TODO - no excludes
@@ -85,30 +85,31 @@ func (m *MdnsMeshPlugin) CreateFanout() *fanout.Fanout {
 	return f
 }
 
-func (m *MdnsMeshPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	log.Infof("Received request for name: %v", r.Question[0].Name)
+func (m *MdnsForwardPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	log.Debugf("Received request for name: %v", r.Question[0].Name)
 
 	f := m.CreateFanout()
 	return f.ServeDNS(ctx, w, r)
 }
 
-func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
+func (m *MdnsForwardPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
 	if m.filter != nil && !m.filter.MatchString(entry.Instance) {
-		log.Errorf("Ignoring entry '%s' because the instance name did not match the filter: '%s'",
+		log.Debugf("Ignoring entry '%s' because the instance name did not match the filter: '%s'",
 			entry.Instance, m.filter.String())
 		return []netip.AddrPort{}
 	}
 
 	ips := []net.IP{}
-	if m.addrMode == PreferIPv6 {
+	switch m.addrMode {
+	case PreferIPv6:
 		ips = append(ips, entry.AddrIPv6...)
 		ips = append(ips, entry.AddrIPv4...)
-	} else if m.addrMode == PreferIPv4 {
+	case PreferIPv4:
 		ips = append(ips, entry.AddrIPv4...)
 		ips = append(ips, entry.AddrIPv6...)
-	} else if m.addrMode == IPv6Only {
+	case IPv6Only:
 		ips = append(ips, entry.AddrIPv6...)
-	} else if m.addrMode == IPv4Only {
+	case IPv4Only:
 		ips = append(ips, entry.AddrIPv4...)
 	}
 
@@ -129,8 +130,8 @@ func (m *MdnsMeshPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEnt
 		addr, ok := netip.AddrFromSlice(ip)
 		port := uint16(entry.Port)
 		if !ok {
-			log.Errorf("Ignoring entry '%s' because the address was not able to be parsed",
-				entry.Instance)
+			log.Warningf("Ignoring address for entry '%s' because it could not be parsed: %s",
+				entry.Instance, ip.String())
 			continue
 		}
 		hosts = append(hosts, netip.AddrPortFrom(addr, port))

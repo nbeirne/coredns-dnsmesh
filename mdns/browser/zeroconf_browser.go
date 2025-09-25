@@ -162,7 +162,7 @@ func (m *ZeroconfBrowser) scheduleRefreshForEntry(ctx context.Context, entry *ze
 	jitter := (rand.Float64()*2 - 1) * JitterFactor * baseRefreshSeconds
 	refreshDuration := time.Duration((baseRefreshSeconds + jitter) * float64(time.Second))
 
-	m.Log.Infof("Refresh scheduled for service: %v in %v (at %v)", entry.Instance, refreshDuration, time.Now().Add(refreshDuration))
+	m.Log.Infof("Refresh scheduled for service: %v in %v", entry.Instance, refreshDuration)
 
 	// Stop any existing timer for this service instance
 	m.stopRefreshForEntry(entry)

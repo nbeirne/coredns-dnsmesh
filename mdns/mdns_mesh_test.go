@@ -1,21 +1,27 @@
-
-package mdns 
+package mdns
 
 import (
-	"slices"
-	"testing"
-	"regexp"
 	"net"
 	"net/netip"
+	"reflect"
+	"regexp"
+	"testing"
 
 	"github.com/grandcat/zeroconf"
 )
 
+func mustParseAddrPorts(addrs ...string) []netip.AddrPort {
+	ports := make([]netip.AddrPort, len(addrs))
+	for i, s := range addrs {
+		ports[i] = netip.MustParseAddrPort(s)
+	}
+	return ports
+}
 
 func TestHostFiltering(t *testing.T) {
 
-	entry := zeroconf.ServiceEntry {
-		ServiceRecord: zeroconf.ServiceRecord { Instance: "test_instance_name" },
+	entry := zeroconf.ServiceEntry{
+		ServiceRecord: zeroconf.ServiceRecord{Instance: "test_instance_name"},
 		AddrIPv4: []net.IP{
 			netip.MustParseAddr("127.0.0.1").AsSlice(),
 			netip.MustParseAddr("2.2.2.2").AsSlice(),
@@ -29,121 +35,90 @@ func TestHostFiltering(t *testing.T) {
 		Port: 10,
 	}
 
-	testCases := [] struct {
+	testCases := []struct {
 		name     string
 		plugin   MdnsMeshPlugin
 		expected []netip.AddrPort
 	}{
 		{
-			name: "defaults",
-			plugin: MdnsMeshPlugin {},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("[::1]:10"),
-				netip.MustParseAddrPort("[::2]:10"),
-				netip.MustParseAddrPort("[::3]:10"),
-				netip.MustParseAddrPort("127.0.0.1:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-				netip.MustParseAddrPort("3.3.3.3:10"),
-			},
+			name:   "defaults (prefer ipv6)",
+			plugin: MdnsMeshPlugin{addrMode: PreferIPv6},
+			expected: mustParseAddrPorts(
+				"[::1]:10", "[::2]:10", "[::3]:10",
+				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
+			),
 		},
 		{
-			name: "ipv6_only",
-			plugin: MdnsMeshPlugin {
-				addrMode: IPv6Only,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("[::1]:10"),
-				netip.MustParseAddrPort("[::2]:10"),
-				netip.MustParseAddrPort("[::3]:10"),
-			},
+			name:   "ipv6_only",
+			plugin: MdnsMeshPlugin{addrMode: IPv6Only},
+			expected: mustParseAddrPorts(
+				"[::1]:10", "[::2]:10", "[::3]:10",
+			),
 		},
 		{
-			name: "ipv4_only",
-			plugin: MdnsMeshPlugin {
-				addrMode: IPv4Only,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("127.0.0.1:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-				netip.MustParseAddrPort("3.3.3.3:10"),
-			},
+			name:   "ipv4_only",
+			plugin: MdnsMeshPlugin{addrMode: IPv4Only},
+			expected: mustParseAddrPorts(
+				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
+			),
 		},
 		{
-			name: "prefer_ipv4",
-			plugin: MdnsMeshPlugin {
-				addrMode: PreferIPv4,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("127.0.0.1:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-				netip.MustParseAddrPort("3.3.3.3:10"),
-				netip.MustParseAddrPort("[::1]:10"),
-				netip.MustParseAddrPort("[::2]:10"),
-				netip.MustParseAddrPort("[::3]:10"),
-			},
+			name:   "prefer_ipv4",
+			plugin: MdnsMeshPlugin{addrMode: PreferIPv4},
+			expected: mustParseAddrPorts(
+				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
+				"[::1]:10", "[::2]:10", "[::3]:10",
+			),
 		},
 		{
-			name: "filter",
-			plugin: MdnsMeshPlugin {
-				filter: regexp.MustCompile("nothing"),
-			},
-			expected: []netip.AddrPort {
-			},
+			name:     "filter",
+			plugin:   MdnsMeshPlugin{filter: regexp.MustCompile("nothing")},
+			expected: mustParseAddrPorts(),
 		},
 		{
-			name: "filter_include",
-			plugin: MdnsMeshPlugin {
-				filter: regexp.MustCompile(".*"),
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("[::1]:10"),
-				netip.MustParseAddrPort("[::2]:10"),
-				netip.MustParseAddrPort("[::3]:10"),
-				netip.MustParseAddrPort("127.0.0.1:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-				netip.MustParseAddrPort("3.3.3.3:10"),
-			},
+			name:   "filter_include",
+			plugin: MdnsMeshPlugin{filter: regexp.MustCompile(".*"), addrMode: PreferIPv6},
+			expected: mustParseAddrPorts(
+				"[::1]:10", "[::2]:10", "[::3]:10",
+				"127.0.0.1:10", "2.2.2.2:10", "3.3.3.3:10",
+			),
 		},
 		{
-			name: "ignore_self",
-			plugin: MdnsMeshPlugin {
-				ignoreSelf: true,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("[::2]:10"),
-				netip.MustParseAddrPort("[::3]:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-				netip.MustParseAddrPort("3.3.3.3:10"),
-			},
+			name:   "ignore_self",
+			plugin: MdnsMeshPlugin{ignoreSelf: true, addrMode: PreferIPv6},
+			expected: mustParseAddrPorts(
+				"[::2]:10", "[::3]:10",
+				"2.2.2.2:10", "3.3.3.3:10",
+			),
 		},
 		{
-			name: "addrs_per_host",
-			plugin: MdnsMeshPlugin {
-				addrsPerHost: 2,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("[::1]:10"),
-				netip.MustParseAddrPort("[::2]:10"),
-			},
+			name:   "addrs_per_host",
+			plugin: MdnsMeshPlugin{addrsPerHost: 2, addrMode: PreferIPv6},
+			expected: mustParseAddrPorts(
+				"[::1]:10", "[::2]:10",
+			),
 		},
 		{
-			name: "addrs_per_host_v4_only",
-			plugin: MdnsMeshPlugin {
-				addrMode: IPv4Only,
-				addrsPerHost: 2,
-			},
-			expected: []netip.AddrPort {
-				netip.MustParseAddrPort("127.0.0.1:10"),
-				netip.MustParseAddrPort("2.2.2.2:10"),
-			},
+			name:   "addrs_per_host_v4_only",
+			plugin: MdnsMeshPlugin{addrMode: IPv4Only, addrsPerHost: 2},
+			expected: mustParseAddrPorts(
+				"127.0.0.1:10", "2.2.2.2:10",
+			),
 		},
 	}
 
 	for _, tc := range testCases {
-		resultingHosts := tc.plugin.hostsForZeroconfServiceEntry(&entry)
+		t.Run(tc.name, func(t *testing.T) {
+			resultingHosts := tc.plugin.hostsForZeroconfServiceEntry(&entry)
 
-		if !slices.Equal(tc.expected, resultingHosts) {
-			t.Errorf("test: %s: resulting hosts do not match expected hosts.\nExpected: %v\nGot:      %v", tc.name, tc.expected, resultingHosts)
-		}
+			// Handle case where expected is empty
+			if len(tc.expected) == 0 && len(resultingHosts) == 0 {
+				return
+			}
+
+			if !reflect.DeepEqual(tc.expected, resultingHosts) {
+				t.Errorf("Resulting hosts do not match expected hosts.\nExpected: %v\nGot:      %v", tc.expected, resultingHosts)
+			}
+		})
 	}
 }

@@ -77,49 +77,49 @@ func setupAdvertise(c *caddy.Controller) error {
 	for c.NextBlock() {
 		switch c.Val() {
 		case "instance_name":
-			remaining := c.RemainingArgs()
-			if len(remaining) != 1 {
-				return c.ArgErr()
+			val, err := parseSingleArg(c)
+			if err != nil {
+				return err
 			}
-			instanceName = remaining[0]
+			instanceName = val
 
 		case "type":
-			remaining := c.RemainingArgs()
-			if len(remaining) != 1 {
-				return c.ArgErr()
+			val, err := parseSingleArg(c)
+			if err != nil {
+				return err
 			}
-			mdnsType = remaining[0]
+			mdnsType = val
 
 		case "port":
-			remaining := c.RemainingArgs()
-			if len(remaining) != 1 {
-				return c.ArgErr()
-			}
-			portInt, err := strconv.Atoi(remaining[0])
+			val, err := parseSingleArg(c)
 			if err != nil {
-				return c.Errf("port provided is invalid: %s", remaining[0])
+				return err
+			}
+			portInt, err := strconv.Atoi(val)
+			if err != nil {
+				return c.Errf("port provided is invalid: %s", val)
 			}
 			port = portInt
 
 		case "ttl":
-			remaining := c.RemainingArgs()
-			if len(remaining) != 1 {
-				return c.ArgErr()
-			}
-			ttlInt, err := strconv.ParseUint(remaining[0], 10, 32)
+			val, err := parseSingleArg(c)
 			if err != nil {
-				return c.Errf("ttl provided is invalid: %s", remaining[0])
+				return err
+			}
+			ttlInt, err := strconv.ParseUint(val, 10, 32)
+			if err != nil {
+				return c.Errf("ttl provided is invalid: %s", val)
 			}
 			ttl = uint32(ttlInt)
 
 		case "iface_bind_subnet":
-			remaining := c.RemainingArgs()
-			if len(remaining) != 1 {
-				return c.ArgErr()
-			}
-			_, subnet, err := net.ParseCIDR(remaining[0])
+			val, err := parseSingleArg(c)
 			if err != nil {
-				return c.Errf("Failed to parse subnet: %s", remaining[0])
+				return err
+			}
+			_, subnet, err := net.ParseCIDR(val)
+			if err != nil {
+				return c.Errf("Failed to parse subnet: %s", val)
 			}
 			ifaceBindSubnet = subnet
 
@@ -173,6 +173,23 @@ func getServerPort(c *caddy.Controller) (int, error) {
 	return port, err
 }
 
+func parseSingleArg(c *caddy.Controller) (string, error) {
+	optionName := c.Val()
+
+	if !c.NextArg() {
+		return "", c.Errf("option '%s' expects an argument, but got none was provided", optionName)
+	}
+
+	val := c.Val()
+	if val == "{" || val == "}" {
+		return "", c.Errf("option '%s' expects an argument, but got '%v'", optionName, val)
+	}
+	//	if c.NextArg() {
+	//		return "", c.Errf("option '%s' expects only one argument, but found more: '%s'", optionName, c.Val())
+	//	}
+	return val, nil
+}
+
 func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMeshPlugin, error) {
 	m := MdnsMeshPlugin{}
 
@@ -185,60 +202,59 @@ func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMe
 
 	for c.Next() {
 		args := c.RemainingArgs()
-		if len(args) != 1 {
-			return nil, plugin.Error(QueryPluginName, c.ArgErr())
+		if len(args) < 1 {
+			return nil, plugin.Error(QueryPluginName, c.Errf("a zone must be specified"))
 		}
 		m.Zone = args[0]
 
 		for c.NextBlock() {
 			switch c.Val() {
 			case "type":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
+				val, err := parseSingleArg(c)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, err)
 				}
-				mdnsType = remaining[0]
+				mdnsType = val
 
 			case "iface_bind_subnet":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				_, subnet, err := net.ParseCIDR(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse subnet: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				_, subnet, err := net.ParseCIDR(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse subnet: %s", val))
 				}
 				ifaceBindSubnet = subnet
 
 			case "ignore_self":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				ignoreSelf, err := strconv.ParseBool(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse boolean: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				ignoreSelf, err := strconv.ParseBool(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("failed to parse boolean for 'ignore_self': %s", val))
 				}
 				m.ignoreSelf = ignoreSelf
 
 			case "filter":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				filter, err := regexp.Compile(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("failed to compile regex: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				filter, err := regexp.Compile(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("failed to compile regex for 'filter': %s", val))
 				}
 				m.filter = filter
 
 			case "address_mode":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
+				val, err := parseSingleArg(c)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, err)
 				}
-
-				switch remaining[0] {
+				switch val {
 				case "prefer_ipv6":
 					m.addrMode = PreferIPv6
 				case "prefer_ipv4":
@@ -248,57 +264,57 @@ func parseQueryOptions(c *caddy.Controller, findIfaces interfaceFinder) (*MdnsMe
 				case "only_ipv4":
 					m.addrMode = IPv4Only
 				default:
-					return nil, plugin.Error(QueryPluginName, c.Errf("unknown address_mode: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, c.Errf("unknown address_mode: %s", val))
 				}
 
 			case "addresses_per_host":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				addrsPerHostInt, err := strconv.Atoi(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("addresses_per_host could not be parsed: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				addrsPerHostInt, err := strconv.Atoi(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("addresses_per_host could not be parsed: %s", val))
 				}
 				m.addrsPerHost = addrsPerHostInt
 
 			case "timeout":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				timeout, err := time.ParseDuration(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("invalid duration for timeout: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				timeout, err := time.ParseDuration(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("invalid duration for timeout: %s", val))
 				}
 				m.Timeout = timeout
 
 			case "zone":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
+				val, err := parseSingleArg(c)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, err)
 				}
-				m.Zone = remaining[0]
+				m.Zone = val
 
 			case "attempts":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				attempts, err := strconv.Atoi(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("attempts is not an integer: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				attempts, err := strconv.Atoi(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("attempts is not an integer: %s", val))
 				}
 				m.Attempts = attempts
 
 			case "worker_count":
-				remaining := c.RemainingArgs()
-				if len(remaining) != 1 {
-					return nil, plugin.Error(QueryPluginName, c.ArgErr())
-				}
-				workerCount, err := strconv.Atoi(remaining[0])
+				val, err := parseSingleArg(c)
 				if err != nil {
-					return nil, plugin.Error(QueryPluginName, c.Errf("worker_count is not an integer: %s", remaining[0]))
+					return nil, plugin.Error(QueryPluginName, err)
+				}
+				workerCount, err := strconv.Atoi(val)
+				if err != nil {
+					return nil, plugin.Error(QueryPluginName, c.Errf("worker_count is not an integer: %s", val))
 				}
 				m.WorkerCount = workerCount
 

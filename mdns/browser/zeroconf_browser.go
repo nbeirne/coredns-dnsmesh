@@ -140,9 +140,9 @@ func (m *ZeroconfBrowser) processEntries(ctx context.Context, entriesCh chan *ze
 		} else {
 			// Only log the full details if the service is new.
 			if m.cache.getExpiry(entry.Instance).IsZero() {
-				m.Log.Infof("Discovered new service:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
+				m.Log.Infof("Discovered new service:\n    Instance: %s\n    Service: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.Service, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
 			} else {
-				m.Log.Debugf("Service updated:\n    Instance: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
+				m.Log.Debugf("Service updated:\n    Instance: %s\n    Service: %s\n    HostName: %s\n    AddrIPv4: %s\n    AddrIPv6: %s\n    Port: %d\n    TTL: %d", entry.Instance, entry.Service, entry.HostName, entry.AddrIPv4, entry.AddrIPv6, entry.Port, entry.TTL)
 			}
 			m.cache.addEntry(entry)
 			m.scheduleRefreshForEntry(ctx, entry, entriesCh) // may write to entriesCh

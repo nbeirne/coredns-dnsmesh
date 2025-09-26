@@ -183,7 +183,7 @@ func (m *ZeroconfBrowser) scheduleRefreshForEntry(ctx context.Context, entry *ze
 		lookupTimeout := (time.Duration(entry.TTL) * time.Second) - refreshDuration
 		// Clamp the lookup timeout to a reasonable maximum (e.g., 15s).
 		lookupTimeout = min(lookupTimeout, MaxLookupTimeout)
-		m.Log.Infof("TTL for %v is low, performing lookup with timeout %v", entry.Instance, lookupTimeout)
+		m.Log.Debugf("TTL for %v is low, performing lookup with timeout %v", entry.Instance, lookupTimeout)
 		lCtx, lCancel := context.WithTimeout(ctx, lookupTimeout)
 		defer lCancel()
 

@@ -1,6 +1,7 @@
 
 . {
   dnsmesh_mdns_advertise {
+    type _dns2._udp
     instance_name "dnsmesh-{$MESH_ID}"
     iface_bind_subnet 192.168.2.1/24
     ttl 30

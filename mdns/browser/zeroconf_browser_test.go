@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"sync"
 	"testing"
@@ -204,7 +205,7 @@ func TestTTL(t *testing.T) {
 			lookupInput:            []*zeroconf.ServiceEntry{},
 			sleepBeforeExpectation: 2 * time.Second,
 			expected:               []*zeroconf.ServiceEntry{},
-			expectedBrowseCalls:    1,
+			expectedBrowseCalls:    2, // expect 2 browse calls. One as a fallback.
 			expectedLookupCalls: map[string]int{
 				"host0": 1,
 			},
@@ -221,7 +222,7 @@ func TestTTL(t *testing.T) {
 			},
 			sleepBeforeExpectation: 20 * time.Second, // 80% of 6 is 4.8
 			expected:               []*zeroconf.ServiceEntry{},
-			expectedBrowseCalls:    1,
+			expectedBrowseCalls:    3, // initial, then one per service.
 			expectedLookupCalls: map[string]int{
 				"host0": 1,
 				"host1": 1,
@@ -386,9 +387,10 @@ func TestTTL(t *testing.T) {
 
 // A fake that can be controlled by the test
 type controllableFakeZeroconf struct {
-	logger          Logger
-	browseEntriesCh chan *zeroconf.ServiceEntry
-	lookupEntriesCh chan *zeroconf.ServiceEntry
+	logger            Logger
+	browseEntriesCh   chan *zeroconf.ServiceEntry
+	lookupEntriesCh   chan *zeroconf.ServiceEntry
+	lookupShouldError bool
 
 	browseCalls int
 	lookupCalls map[string]int
@@ -430,6 +432,10 @@ func (r *controllableFakeResolver) Lookup(ctx context.Context, instance, service
 	r.parent.lookupCalls[instance]++
 	r.parent.mutex.Unlock()
 
+	if r.parent.lookupShouldError {
+		return errors.New("mock lookup error")
+	}
+
 	// This fake lookup blocks and waits for the test to send entries or the context to be canceled.
 	for {
 		select {
@@ -440,8 +446,6 @@ func (r *controllableFakeResolver) Lookup(ctx context.Context, instance, service
 			entries <- entry
 		}
 	}
-
-	return nil
 }
 
 // sorting

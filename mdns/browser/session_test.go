@@ -129,9 +129,6 @@ func (m *mockResolver) Browse(ctx context.Context, service, domain string, entri
 		return errors.New("test browse error")
 	}
 	if m.browseShouldBlock {
-		// This simulates the real behavior of blocking until the context is done.
-		// Crucially, it does NOT close the entries channel, which is the
-		// behavior that can lead to a leak in the original code.
 		<-ctx.Done()
 	}
 
@@ -139,6 +136,7 @@ func (m *mockResolver) Browse(ctx context.Context, service, domain string, entri
 }
 
 func (m *mockResolver) Lookup(ctx context.Context, instance, service, domain string, entries chan<- *zeroconf.ServiceEntry) error {
+	defer close(entries)
 	return nil // Not needed for this test
 }
 

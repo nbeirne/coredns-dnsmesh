@@ -1,12 +1,12 @@
 .:53 {
 
-  dnsmesh_mdns_forward sky.nbeirne.ca. {
-    type _dns._udp
+  dnsmesh_mdns_forward example.com. {
+    type _dns2._udp
     iface_bind_subnet 192.168.2.1/24
   }
 
   log 
-  #debug
+  debug
   errors
 
   reload

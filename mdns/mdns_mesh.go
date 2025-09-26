@@ -77,7 +77,7 @@ func (m *MdnsForwardPlugin) CreateFanout() *fanout.Fanout {
 	for _, service := range services {
 		hosts := m.hostsForZeroconfServiceEntry(service)
 		for _, host := range hosts {
-			log.Infof("Found host for instance %s: %s", service.Instance, host.String())
+			log.Infof("Forwarding query to %v instance %s: %s", service.Service, service.Instance, host.String())
 			f.AddClient(fanout.NewClient(host.String(), fanout.UDP))
 		}
 	}

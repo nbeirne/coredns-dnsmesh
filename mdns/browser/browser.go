@@ -9,6 +9,8 @@ package browser
 // 6. The stop function should wait until all go routines are finished (especially the browseLoop and receiveEntries routines)
 
 import (
+	"context"
+
 	"github.com/grandcat/zeroconf"
 )
 
@@ -16,4 +18,5 @@ type MdnsBrowserInterface interface {
 	Start() error
 	Stop()
 	Services() []*zeroconf.ServiceEntry
+	ForceRefresh(ctx context.Context)
 }

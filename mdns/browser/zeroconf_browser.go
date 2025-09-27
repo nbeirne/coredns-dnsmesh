@@ -109,6 +109,16 @@ func (m *ZeroconfBrowser) Interfaces() *[]net.Interface {
 	return m.interfaces
 }
 
+// ForceRefresh triggers a non-blocking, one-shot mDNS browse operation to quickly
+// rediscover services on the network. This is useful to call reactively when an
+// operation like a DNS query fails, as it can refresh the cache with up-to-date
+// service information without waiting for the next TTL-based refresh.
+func (m *ZeroconfBrowser) ForceRefresh(ctx context.Context) {
+	m.Log.Infof("Force-refresh triggered. Performing a one-shot browse for '%s'.", m.service)
+	session := NewZeroconfSession(m.zeroConfImpl, m.interfaces)
+	_ = session.Browse(ctx, m.service, m.domain, m.entriesCh)
+}
+
 func (m *ZeroconfBrowser) browseLoop() {
 	outerCtx, outerCancel := context.WithCancel(context.Background())
 	m.cancelBrowse = outerCancel

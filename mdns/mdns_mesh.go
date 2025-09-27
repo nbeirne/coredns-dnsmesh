@@ -43,6 +43,8 @@ type MdnsForwardPlugin struct {
 	addrsPerHost int
 
 	browser browser.MdnsBrowserInterface
+
+	createFanoutFunc func(p *MdnsForwardPlugin) fanoutHandler
 }
 
 // TODO: fanout settings
@@ -60,7 +62,12 @@ func (m *MdnsForwardPlugin) Start() error {
 	return nil
 }
 
-func (m *MdnsForwardPlugin) CreateFanout() *fanout.Fanout {
+// fanoutHandler defines an interface that matches the fanout.Fanout's ServeDNS method.
+type fanoutHandler interface {
+	ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error)
+}
+
+func (m *MdnsForwardPlugin) createFanout() fanoutHandler {
 	f := &fanout.Fanout{
 		Timeout:               m.Timeout,
 		ExcludeDomains:        fanout.NewDomain(), // TODO - no excludes
@@ -87,9 +94,30 @@ func (m *MdnsForwardPlugin) CreateFanout() *fanout.Fanout {
 
 func (m *MdnsForwardPlugin) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	log.Debugf("Received request for name: %v", r.Question[0].Name)
+	createFanout := m.createFanout
+	if m.createFanoutFunc != nil {
+		createFanout = func() fanoutHandler { return m.createFanoutFunc(m) }
+	}
 
-	f := m.CreateFanout()
-	return f.ServeDNS(ctx, w, r)
+	// First attempt
+	f := createFanout()
+	recorder := NewResponseRecorder(w)
+	rcode, err := f.ServeDNS(ctx, recorder, r)
+
+	// If the first attempt fails (e.g., SERVFAIL, or no response leading to an error),
+	// force a refresh and retry.
+	if err != nil || (recorder.Rcode != dns.RcodeSuccess && recorder.Rcode != dns.RcodeNameError) {
+		log.Warningf("Initial query for '%s' failed (rcode: %d, err: %v). Forcing mDNS refresh and retrying.", r.Question[0].Name, recorder.Rcode, err)
+		timeoutCtx, _ := context.WithTimeout(ctx, 1.0*time.Second)
+		m.browser.ForceRefresh(timeoutCtx)
+
+		// Second attempt
+		f = createFanout()
+		return f.ServeDNS(ctx, w, r)
+	}
+
+	// If the initial attempt was successful, just return the results.
+	return rcode, err
 }
 
 func (m *MdnsForwardPlugin) hostsForZeroconfServiceEntry(entry *zeroconf.ServiceEntry) (hosts []netip.AddrPort) {
